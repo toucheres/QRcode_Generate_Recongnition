@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/">
+        <file>toucher.jpg</file>
+    </qresource>
+</RCC>
