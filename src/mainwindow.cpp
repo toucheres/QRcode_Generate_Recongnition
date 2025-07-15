@@ -10,10 +10,19 @@
 #include <QPainter>
 #include <QPixmap>
 
+// ZXing includes
+#ifdef ZXING_EXPERIMENTAL_API
+#include "ZXing/WriteBarcode.h"
+#include "ZXing/BarcodeFormat.h"
+#else
+#include "MultiFormatWriter.h"
+#include "BitMatrix.h"
+#include "BarcodeFormat.h"
+#endif
+
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , m_titleLabel(nullptr)
-    , m_pushButton(nullptr)
     , m_centralWidget(nullptr)
     , m_textInput(nullptr)
     , m_generateButton(nullptr)
@@ -58,12 +67,7 @@ void MainWindow::setupUI()
     m_qrCodeLabel->setStyleSheet("QLabel { border: 2px dashed #ccc; background-color: #f9f9f9; }");
     m_qrCodeLabel->setText("二维码将显示在这里");
     
-    // 创建原来的测试按钮
-    m_pushButton = new QPushButton("测试按钮", this);
-    m_pushButton->setStyleSheet("QPushButton { font-size: 14px; padding: 10px 20px; }");
-    
     // 连接信号和槽
-    connect(m_pushButton, &QPushButton::clicked, this, &MainWindow::onButtonClicked);
     connect(m_generateButton, &QPushButton::clicked, this, &MainWindow::onGenerateQRCode);
     connect(m_textInput, &QLineEdit::returnPressed, this, &MainWindow::onGenerateQRCode);
     
@@ -72,13 +76,7 @@ void MainWindow::setupUI()
     mainLayout->addWidget(m_textInput);
     mainLayout->addWidget(m_generateButton, 0, Qt::AlignCenter);
     mainLayout->addWidget(m_qrCodeLabel, 0, Qt::AlignCenter);
-    mainLayout->addWidget(m_pushButton, 0, Qt::AlignCenter);
     mainLayout->addStretch();
-}
-
-void MainWindow::onButtonClicked()
-{
-    QMessageBox::information(this, "提示", "您点击了按钮！");
 }
 
 void MainWindow::onGenerateQRCode()
@@ -89,43 +87,72 @@ void MainWindow::onGenerateQRCode()
         return;
     }
     
-    QPixmap qrPixmap = generateQRCodePixmap(text);
-    if (!qrPixmap.isNull()) {
-        m_qrCodeLabel->setPixmap(qrPixmap);
-        m_qrCodeLabel->setText("");
-    } else {
-        QMessageBox::critical(this, "错误", "生成二维码失败！");
+    try {
+        QPixmap qrPixmap = generateQRCodePixmap(text);
+        if (!qrPixmap.isNull()) {
+            m_qrCodeLabel->setPixmap(qrPixmap);
+            m_qrCodeLabel->setText("");
+        } else {
+            QMessageBox::critical(this, "错误", "生成二维码失败！");
+        }
+    } catch (const std::exception& e) {
+        QMessageBox::critical(this, "错误", QString("生成二维码时发生错误：%1").arg(e.what()));
     }
 }
 
 QPixmap MainWindow::generateQRCodePixmap(const QString& text)
 {
-    // 简单的模拟二维码生成 - 实际项目中需要使用QR码库如qrencode
-    QPixmap pixmap(300, 300);
-    pixmap.fill(Qt::white);
+    try {
+        std::string stdText = text.toStdString();
+        
+#ifdef ZXING_EXPERIMENTAL_API
+        // 使用实验性API
+        ZXing::CreatorOptions options(ZXing::BarcodeFormat::QRCode);
+        options.ecLevel("M"); // 设置错误纠正级别为中等
+        
+        auto barcode = ZXing::CreateBarcodeFromText(stdText, options);
+        if (!barcode.isValid()) {
+            return QPixmap();
+        }
+        
+        ZXing::WriterOptions writerOptions;
+        writerOptions.sizeHint(300).withQuietZones(true);
+        
+        auto image = ZXing::WriteBarcodeToImage(barcode, writerOptions);
+        
+        // 将ZXing Image转换为QPixmap
+        QImage qImage(image.data(), image.width(), image.height(), QImage::Format_Grayscale8);
+        return QPixmap::fromImage(qImage);
+        
+#else
+        // 使用传统API
+        ZXing::MultiFormatWriter writer(ZXing::BarcodeFormat::QRCode);
+        writer.setMargin(2);
+        writer.setEccLevel(1); // 错误纠正级别 M
+        
+        auto bitMatrix = writer.encode(stdText, 300, 300);
+        return zxingMatrixToQPixmap(bitMatrix);
+#endif
+        
+    } catch (const std::exception& e) {
+        qDebug() << "Error generating QR code:" << e.what();
+        return QPixmap();
+    }
+}
+
+QPixmap MainWindow::zxingMatrixToQPixmap(const ZXing::BitMatrix& matrix)
+{
+    int width = matrix.width();
+    int height = matrix.height();
     
-    QPainter painter(&pixmap);
-    painter.setPen(Qt::black);
-    painter.setBrush(Qt::black);
+    QImage image(width, height, QImage::Format_RGB32);
     
-    // 绘制简单的网格模式作为示例
-    int gridSize = 10;
-    int offset = 50;
-    
-    for (int i = 0; i < 20; i++) {
-        for (int j = 0; j < 20; j++) {
-            // 基于文本内容生成伪随机图案
-            int hash = qHash(text + QString::number(i) + QString::number(j));
-            if (hash % 3 == 0) {
-                painter.fillRect(offset + i * gridSize, offset + j * gridSize, gridSize, gridSize, Qt::black);
-            }
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            QRgb color = matrix.get(x, y) ? qRgb(0, 0, 0) : qRgb(255, 255, 255);
+            image.setPixel(x, y, color);
         }
     }
     
-    // 绘制定位标记
-    painter.fillRect(offset, offset, gridSize * 3, gridSize * 3, Qt::black);
-    painter.fillRect(offset + gridSize * 16, offset, gridSize * 3, gridSize * 3, Qt::black);
-    painter.fillRect(offset, offset + gridSize * 16, gridSize * 3, gridSize * 3, Qt::black);
-    
-    return pixmap;
+    return QPixmap::fromImage(image);
 }
