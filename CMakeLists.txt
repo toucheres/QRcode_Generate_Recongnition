@@ -29,8 +29,10 @@ find_package(Qt6 REQUIRED COMPONENTS MultimediaWidgets)
 include_directories(include)
 
 # 修改 ZXing 配置，禁用 stb 下载
-set(BUILD_EXAMPLES OFF CACHE BOOL "Build examples")
-set(BUILD_BLACKBOX_TESTS OFF CACHE BOOL "Build blackbox tests")
+set(BUILD_EXAMPLES OFF)
+set(BUILD_BLACKBOX_TESTS OFF)
+set(BUILD_UNIT_TESTS OFF)
+set(BUILD_DEPENDENCIES OFF)
 
 # 直接添加 ZXing 核心库而不依赖 stb
 add_subdirectory(3rd/zxing/core)
