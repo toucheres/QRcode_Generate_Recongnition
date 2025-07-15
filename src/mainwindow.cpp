@@ -21,6 +21,8 @@
 #include <QTextEdit>
 #include <QSplitter>
 #include <QGroupBox>
+#include <QCameraDevice>
+#include <QMediaDevices>
 
 // ZXing includes
 #ifdef ZXING_EXPERIMENTAL_API
@@ -49,12 +51,31 @@ MainWindow::MainWindow(QWidget *parent)
     , m_imageDisplayLabel(nullptr)
     , m_resultTextEdit(nullptr)
     , m_statusLabel(nullptr)
+    , m_cameraWidget(nullptr)
+    , m_cameraComboBox(nullptr)
+    , m_toggleCameraButton(nullptr)
+    , m_captureButton(nullptr)
+    , m_videoWidget(nullptr)
+    , m_cameraStatusLabel(nullptr)
+    , m_cameraResultTextEdit(nullptr)
     , m_networkManager(nullptr)
     , m_currentReply(nullptr)
+    , m_camera(nullptr)
+    , m_imageCapture(nullptr)
+    , m_captureSession(nullptr)
+    , m_recognitionTimer(nullptr)
+    , m_cameraActive(false)
 {
+    qDebug() << "MainWindow constructor started";
+    
+    // 检查摄像头权限和调试信息
+    checkCameraPermissions();
+    
     setupUI();
     setWindowTitle("QR码生成识别器");
-    resize(800, 700);
+    resize(900, 750);
+    
+    qDebug() << "MainWindow constructor completed";
 }
 
 MainWindow::~MainWindow()
@@ -62,6 +83,10 @@ MainWindow::~MainWindow()
     if (m_currentReply) {
         m_currentReply->abort();
         m_currentReply->deleteLater();
+    }
+    stopCamera();
+    if (m_recognitionTimer) {
+        m_recognitionTimer->stop();
     }
 }
 
@@ -86,9 +111,11 @@ void MainWindow::setupUI()
     // 设置标签页
     setupGenerateMode();
     setupRecognizeMode();
+    setupCameraRecognition();
     
     m_tabWidget->addTab(m_generateWidget, "生成模式");
     m_tabWidget->addTab(m_recognizeWidget, "识别模式");
+    m_tabWidget->addTab(m_cameraWidget, "摄像头识别");
     
     // 连接标签页切换信号
     connect(m_tabWidget, QOverload<int>::of(&QTabWidget::currentChanged), 
@@ -98,6 +125,9 @@ void MainWindow::setupUI()
     
     // 初始化网络管理器
     m_networkManager = new QNetworkAccessManager(this);
+    
+    // 初始化摄像头 - 移到setupUI的最后
+    initializeCamera();
 }
 
 void MainWindow::setupGenerateMode()
@@ -216,6 +246,349 @@ void MainWindow::setupRecognizeMode()
     mainLayout->addWidget(inputGroup);
     mainLayout->addWidget(splitter, 1);
     mainLayout->addWidget(m_statusLabel);
+}
+
+void MainWindow::setupCameraRecognition()
+{
+    m_cameraWidget = new QWidget();
+    QVBoxLayout *mainLayout = new QVBoxLayout(m_cameraWidget);
+    
+    // 标题
+    QLabel *titleLabel = new QLabel("摄像头QR码识别", m_cameraWidget);
+    titleLabel->setAlignment(Qt::AlignCenter);
+    titleLabel->setStyleSheet("QLabel { font-size: 24px; font-weight: bold; color: #333; margin: 20px; }");
+    
+    // 控制区域
+    QGroupBox *controlGroup = new QGroupBox("摄像头控制");
+    QVBoxLayout *controlLayout = new QVBoxLayout(controlGroup);
+    
+    // 摄像头选择
+    QHBoxLayout *cameraSelectLayout = new QHBoxLayout();
+    QLabel *cameraLabel = new QLabel("选择摄像头:");
+    m_cameraComboBox = new QComboBox();
+    
+    // 添加刷新按钮
+    QPushButton *refreshButton = new QPushButton("刷新");
+    refreshButton->setStyleSheet("QPushButton { font-size: 12px; padding: 5px 10px; background-color: #6c757d; color: white; border: none; border-radius: 3px; } QPushButton:hover { background-color: #5a6268; }");
+    connect(refreshButton, &QPushButton::clicked, this, &MainWindow::updateCameraList);
+    
+    cameraSelectLayout->addWidget(cameraLabel);
+    cameraSelectLayout->addWidget(m_cameraComboBox, 1);
+    cameraSelectLayout->addWidget(refreshButton);
+    cameraSelectLayout->addStretch();
+    
+    // 控制按钮
+    QHBoxLayout *buttonLayout = new QHBoxLayout();
+    m_toggleCameraButton = new QPushButton("启动摄像头");
+    m_toggleCameraButton->setStyleSheet("QPushButton { font-size: 14px; padding: 10px 20px; background-color: #28a745; color: white; border: none; border-radius: 5px; } QPushButton:hover { background-color: #218838; }");
+    
+    m_captureButton = new QPushButton("拍照识别");
+    m_captureButton->setStyleSheet("QPushButton { font-size: 14px; padding: 10px 20px; background-color: #007ACC; color: white; border: none; border-radius: 5px; } QPushButton:hover { background-color: #005a9e; }");
+    m_captureButton->setEnabled(false);
+    
+    buttonLayout->addWidget(m_toggleCameraButton);
+    buttonLayout->addWidget(m_captureButton);
+    buttonLayout->addStretch();
+    
+    controlLayout->addLayout(cameraSelectLayout);
+    controlLayout->addLayout(buttonLayout);
+    
+    // 创建水平分割器
+    QSplitter *splitter = new QSplitter(Qt::Horizontal);
+    
+    // 视频显示区域
+    QGroupBox *videoGroup = new QGroupBox("摄像头画面");
+    QVBoxLayout *videoLayout = new QVBoxLayout(videoGroup);
+    m_videoWidget = new QVideoWidget();
+    m_videoWidget->setMinimumSize(400, 300);
+    m_videoWidget->setStyleSheet("QVideoWidget { border: 2px solid #ccc; background-color: #000; }");
+    videoLayout->addWidget(m_videoWidget);
+    
+    // 结果显示区域
+    QGroupBox *resultGroup = new QGroupBox("识别结果");
+    QVBoxLayout *resultLayout = new QVBoxLayout(resultGroup);
+    m_cameraResultTextEdit = new QTextEdit();
+    m_cameraResultTextEdit->setPlaceholderText("实时识别结果将显示在这里...\n启动摄像头后会自动尝试识别画面中的二维码");
+    m_cameraResultTextEdit->setStyleSheet("QTextEdit { font-size: 14px; padding: 10px; }");
+    resultLayout->addWidget(m_cameraResultTextEdit);
+    
+    splitter->addWidget(videoGroup);
+    splitter->addWidget(resultGroup);
+    splitter->setSizes({450, 350});
+    
+    // 状态标签
+    m_cameraStatusLabel = new QLabel("摄像头未启动");
+    m_cameraStatusLabel->setStyleSheet("QLabel { color: #666; font-style: italic; }");
+    
+    // 连接信号
+    connect(m_toggleCameraButton, &QPushButton::clicked, this, &MainWindow::onToggleCamera);
+    connect(m_captureButton, &QPushButton::clicked, this, &MainWindow::onCaptureImage);
+    connect(m_cameraComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged), 
+            this, &MainWindow::onCameraChanged);
+    
+    // 布局
+    mainLayout->addWidget(titleLabel);
+    mainLayout->addWidget(controlGroup);
+    mainLayout->addWidget(splitter, 1);
+    mainLayout->addWidget(m_cameraStatusLabel);
+}
+
+void MainWindow::initializeCamera()
+{
+    qDebug() << "Initializing camera...";
+    
+    // 初始化定时器用于实时识别
+    m_recognitionTimer = new QTimer(this);
+    m_recognitionTimer->setInterval(1000); // 每秒识别一次
+    connect(m_recognitionTimer, &QTimer::timeout, this, &MainWindow::onRecognitionTimerTimeout);
+    
+    // 创建捕获会话
+    m_captureSession = new QMediaCaptureSession(this);
+    m_imageCapture = new QImageCapture(this);
+    
+    m_captureSession->setImageCapture(m_imageCapture);
+    m_captureSession->setVideoOutput(m_videoWidget);
+    
+    // 连接图像捕获信号
+    connect(m_imageCapture, &QImageCapture::imageCaptured, this, &MainWindow::onImageCaptured);
+    
+    // 延迟更新摄像头列表，确保系统完全初始化
+    QTimer::singleShot(500, this, &MainWindow::updateCameraList);
+}
+
+void MainWindow::updateCameraList()
+{
+    qDebug() << "Updating camera list...";
+    
+    m_cameraComboBox->clear();
+    
+    // 获取可用摄像头设备
+    m_availableCameras = QMediaDevices::videoInputs();
+    
+    qDebug() << "Found" << m_availableCameras.size() << "camera devices";
+    
+    if (m_availableCameras.isEmpty()) {
+        m_cameraComboBox->addItem("未找到摄像头");
+        m_toggleCameraButton->setEnabled(false);
+        m_cameraStatusLabel->setText("未检测到摄像头设备");
+        
+        // 检查权限和驱动问题
+        qDebug() << "No cameras found. Possible issues:";
+        qDebug() << "1. Camera permission not granted";
+        qDebug() << "2. Camera driver not installed";
+        qDebug() << "3. Camera already in use by another application";
+        
+        // 显示详细错误信息给用户
+        QTimer::singleShot(100, this, [this]() {
+            QString errorMsg = "未找到可用摄像头，可能的原因：\n\n";
+            errorMsg += "1. 摄像头权限未授予\n";
+            errorMsg += "2. 摄像头驱动未正确安装\n";
+            errorMsg += "3. 摄像头正被其他应用程序使用\n";
+            errorMsg += "4. 系统中没有连接摄像头设备\n\n";
+            errorMsg += "请检查系统设置并重试。";
+            
+            QMessageBox::warning(this, "摄像头检测", errorMsg);
+        });
+        
+        return;
+    }
+    
+    // 添加摄像头到列表
+    for (int i = 0; i < m_availableCameras.size(); ++i) {
+        const QCameraDevice &cameraDevice = m_availableCameras.at(i);
+        QString deviceInfo = QString("%1 (%2)")
+                           .arg(cameraDevice.description())
+                           .arg(cameraDevice.id());
+        
+        m_cameraComboBox->addItem(deviceInfo);
+        
+        qDebug() << "Camera" << i << ":" 
+                 << "Description:" << cameraDevice.description()
+                 << "ID:" << cameraDevice.id()
+                 << "Default:" << cameraDevice.isDefault();
+    }
+    
+    // 选择默认摄像头
+    for (int i = 0; i < m_availableCameras.size(); ++i) {
+        if (m_availableCameras.at(i).isDefault()) {
+            m_cameraComboBox->setCurrentIndex(i);
+            break;
+        }
+    }
+    
+    m_toggleCameraButton->setEnabled(true);
+    m_cameraStatusLabel->setText(QString("检测到 %1 个摄像头设备").arg(m_availableCameras.size()));
+}
+
+void MainWindow::startCamera()
+{
+    qDebug() << "Starting camera...";
+    
+    if (m_availableCameras.isEmpty()) {
+        QMessageBox::warning(this, "错误", "未找到可用的摄像头！\n请检查摄像头连接和权限设置。");
+        return;
+    }
+    
+    try {
+        // 停止之前的摄像头
+        if (m_camera) {
+            m_camera->stop();
+            m_camera->deleteLater();
+            m_camera = nullptr;
+        }
+        
+        int selectedIndex = m_cameraComboBox->currentIndex();
+        if (selectedIndex < 0 || selectedIndex >= m_availableCameras.size()) {
+            QMessageBox::warning(this, "错误", "无效的摄像头选择！");
+            return;
+        }
+        
+        const QCameraDevice &selectedCamera = m_availableCameras.at(selectedIndex);
+        qDebug() << "Selected camera:" << selectedCamera.description();
+        
+        // 创建摄像头
+        m_camera = new QCamera(selectedCamera, this);
+        
+        // 连接错误信号
+        connect(m_camera, &QCamera::errorOccurred, this, &MainWindow::onCameraError);
+        
+        // 连接状态变化信号
+        connect(m_camera, &QCamera::activeChanged, this, [this](bool active) {
+            qDebug() << "Camera active state changed:" << active;
+            if (active) {
+                m_cameraStatusLabel->setText("摄像头已启动 - 实时识别中...");
+            }
+        });
+        
+        // 设置摄像头到捕获会话
+        m_captureSession->setCamera(m_camera);
+        
+        // 检查摄像头是否可用
+        if (!m_camera->isAvailable()) {
+            QMessageBox::warning(this, "错误", "选择的摄像头当前不可用！\n可能正被其他应用程序使用。");
+            return;
+        }
+        
+        // 启动摄像头
+        m_camera->start();
+        
+        // 等待摄像头启动
+        QTimer::singleShot(1000, this, [this]() {
+            if (m_camera && m_camera->isActive()) {
+                m_cameraActive = true;
+                m_toggleCameraButton->setText("停止摄像头");
+                m_toggleCameraButton->setStyleSheet("QPushButton { font-size: 14px; padding: 10px 20px; background-color: #dc3545; color: white; border: none; border-radius: 5px; } QPushButton:hover { background-color: #c82333; }");
+                m_captureButton->setEnabled(true);
+                m_cameraComboBox->setEnabled(false);
+                
+                // 启动实时识别定时器
+                m_recognitionTimer->start();
+                
+                qDebug() << "Camera started successfully";
+            } else {
+                QMessageBox::warning(this, "错误", "摄像头启动失败！\n请检查摄像头权限和驱动程序。");
+            }
+        });
+        
+    } catch (const std::exception& e) {
+        QMessageBox::critical(this, "错误", QString("启动摄像头失败：%1").arg(e.what()));
+        qDebug() << "Camera start exception:" << e.what();
+    }
+}
+
+void MainWindow::stopCamera()
+{
+    if (m_camera) {
+        m_camera->stop();
+        m_camera->deleteLater();
+        m_camera = nullptr;
+    }
+    
+    m_recognitionTimer->stop();
+    
+    m_cameraActive = false;
+    m_toggleCameraButton->setText("启动摄像头");
+    m_toggleCameraButton->setStyleSheet("QPushButton { font-size: 14px; padding: 10px 20px; background-color: #28a745; color: white; border: none; border-radius: 5px; } QPushButton:hover { background-color: #218838; }");
+    m_captureButton->setEnabled(false);
+    m_cameraComboBox->setEnabled(true);
+    m_cameraStatusLabel->setText("摄像头已停止");
+}
+
+void MainWindow::onCaptureImage()
+{
+    if (m_imageCapture && m_cameraActive) {
+        m_imageCapture->capture();
+    }
+}
+
+void MainWindow::onCameraChanged(int index)
+{
+    if (m_cameraActive) {
+        // 如果摄像头正在运行，先停止再重新启动
+        stopCamera();
+        startCamera();
+    }
+}
+
+void MainWindow::onImageCaptured(int id, const QImage& image)
+{
+    Q_UNUSED(id)
+    
+    if (image.isNull()) {
+        return;
+    }
+    
+    QString result = recognizeQRCodeFromImage(image);
+    
+    // 更新结果显示
+    m_cameraResultTextEdit->clear();
+    if (result.startsWith("未找到") || result.startsWith("识别错误")) {
+        m_cameraResultTextEdit->setStyleSheet("QTextEdit { color: #dc3545; }");
+        m_cameraResultTextEdit->setPlainText(QString("拍照识别结果：%1").arg(result));
+    } else {
+        m_cameraResultTextEdit->setStyleSheet("QTextEdit { color: #28a745; font-weight: bold; }");
+        m_cameraResultTextEdit->setPlainText(QString("拍照识别成功！\n内容：%1").arg(result));
+        
+        // 播放成功提示音（可选）
+        QMessageBox::information(this, "识别成功", QString("识别到二维码内容：\n%1").arg(result));
+    }
+}
+
+void MainWindow::onCameraError(QCamera::Error error)
+{
+    QString errorString;
+    switch (error) {
+    case QCamera::NoError:
+        return;
+    case QCamera::CameraError:
+        errorString = "摄像头硬件错误 - 请检查摄像头连接";
+        break;
+    default:
+        errorString = QString("摄像头错误 (代码: %1)").arg(static_cast<int>(error));
+        break;
+    }
+    
+    qDebug() << "Camera error occurred:" << errorString;
+    QMessageBox::warning(this, "摄像头错误", errorString);
+    stopCamera();
+}
+
+void MainWindow::onRecognitionTimerTimeout()
+{
+    // 实时识别（每秒触发一次）
+    if (m_cameraActive && m_imageCapture) {
+        recognizeFromVideoFrame();
+    }
+}
+
+void MainWindow::recognizeFromVideoFrame()
+{
+    // 这里可以实现从视频流中提取帧进行识别
+    // 由于Qt6的VideoFrame API限制，我们使用定时拍照的方式
+    if (m_imageCapture && m_cameraActive) {
+        // 静默捕获用于实时识别
+        m_imageCapture->capture();
+    }
 }
 
 void MainWindow::onGenerateQRCode()
@@ -415,7 +788,12 @@ void MainWindow::onNetworkReplyFinished()
 
 void MainWindow::onModeChanged(int index)
 {
-    qDebug() << "Mode changed to:" << (index == 0 ? "Generate" : "Recognize");
+    qDebug() << "Mode changed to:" << (index == 0 ? "Generate" : (index == 1 ? "Recognize" : "Camera"));
+    
+    // 当切换到其他模式时，停止摄像头
+    if (index != 2 && m_cameraActive) {
+        stopCamera();
+    }
 }
 
 QString MainWindow::recognizeQRCodeFromPixmap(const QPixmap& pixmap)
@@ -472,4 +850,63 @@ void MainWindow::displaySelectedImage(const QPixmap& pixmap)
                                         Qt::KeepAspectRatio, 
                                         Qt::SmoothTransformation);
     m_imageDisplayLabel->setPixmap(scaledPixmap);
+}
+
+void MainWindow::checkCameraPermissions()
+{
+    qDebug() << "Checking camera permissions...";
+    
+#ifdef Q_OS_WINDOWS
+    qDebug() << "Windows platform - camera permissions usually handled by system";
+#endif
+
+#ifdef Q_OS_LINUX
+    qDebug() << "Linux platform - check /dev/video* permissions";
+#endif
+
+#ifdef Q_OS_MACOS
+    qDebug() << "macOS platform - check Privacy & Security settings";
+#endif
+    
+    // 检查Qt多媒体模块是否正确加载
+    qDebug() << "Available video inputs count:" << QMediaDevices::videoInputs().size();
+    
+    // 输出所有可用的媒体设备信息
+    debugCameraInfo();
+}
+
+void MainWindow::debugCameraInfo()
+{
+    qDebug() << "=== Camera Debug Information ===";
+    
+    auto videoInputs = QMediaDevices::videoInputs();
+    qDebug() << "Total video input devices:" << videoInputs.size();
+    
+    for (int i = 0; i < videoInputs.size(); ++i) {
+        const QCameraDevice &device = videoInputs.at(i);
+        qDebug() << "Device" << i << ":";
+        qDebug() << "  Description:" << device.description();
+        qDebug() << "  ID:" << device.id();
+        qDebug() << "  IsDefault:" << device.isDefault();
+        qDebug() << "  Position:" << static_cast<int>(device.position());
+        
+        // 输出支持的视频格式
+        auto formats = device.videoFormats();
+        qDebug() << "  Supported formats:" << formats.size();
+        for (const auto &format : formats) {
+            qDebug() << "    Resolution:" << format.resolution() 
+                     << "FPS:" << format.minFrameRate() << "-" << format.maxFrameRate();
+        }
+    }
+    
+    qDebug() << "=== End Camera Debug Information ===";
+}
+
+void MainWindow::onToggleCamera()
+{
+    if (m_cameraActive) {
+        stopCamera();
+    } else {
+        startCamera();
+    }
 }

@@ -22,6 +22,8 @@ find_package(Qt6Core REQUIRED)
 find_package(Qt6Widgets REQUIRED)
 find_package(Qt6 REQUIRED COMPONENTS Core5Compat)
 find_package(Qt6 REQUIRED COMPONENTS Network)
+find_package(Qt6 REQUIRED COMPONENTS Multimedia)
+find_package(Qt6 REQUIRED COMPONENTS MultimediaWidgets)
 
 #=================== INCLUSION OF Project Files ====================#
 set(FORMS_DIR "${CMAKE_SOURCE_DIR}/forms")
@@ -65,4 +67,4 @@ target_include_directories(QRcode_Generate_Recongnise PRIVATE ${INCLUDE_DIR})
 target_include_directories(QRcode_Generate_Recongnise PRIVATE ${SOURCE_DIR})
 
 #===================== LINKING LIBRARIES =======================#
-target_link_libraries(QRcode_Generate_Recongnise Qt6::Core Qt6::Widgets Qt6::Core5Compat Qt6::Network ZXing::ZXing)
+target_link_libraries(QRcode_Generate_Recongnise Qt6::Core Qt6::Widgets Qt6::Core5Compat Qt6::Network Qt6::Multimedia Qt6::MultimediaWidgets ZXing::ZXing)

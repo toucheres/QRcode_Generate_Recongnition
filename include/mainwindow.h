@@ -11,6 +11,15 @@
 #include <QFileDialog>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
+#include <QTimer>
+#include <QComboBox>
+
+// Qt Multimedia includes
+#include <QCamera>
+#include <QVideoWidget>
+#include <QImageCapture>
+#include <QMediaCaptureSession>
+#include <QVideoFrame>
 
 // ZXing includes
 #include "WriteBarcode.h"
@@ -41,6 +50,14 @@ class MainWindow : public QMainWindow
     void onUrlInputChanged();
     void onNetworkReplyFinished();
     
+    // 摄像头模式
+    void onToggleCamera();
+    void onCaptureImage();
+    void onCameraChanged(int index);
+    void onImageCaptured(int id, const QImage& image);
+    void onCameraError(QCamera::Error error);
+    void onRecognitionTimerTimeout();
+    
     // 通用
     void onModeChanged(int index);
 
@@ -48,6 +65,11 @@ class MainWindow : public QMainWindow
     void setupUI();
     void setupGenerateMode();
     void setupRecognizeMode();
+    void setupCameraRecognition();
+    void initializeCamera();
+    void startCamera();
+    void stopCamera();
+    void updateCameraList();
     
     // 生成相关
     QPixmap generateQRCodePixmap(const QString& text);
@@ -58,6 +80,11 @@ class MainWindow : public QMainWindow
     QString recognizeQRCodeFromPixmap(const QPixmap& pixmap);
     void displayRecognitionResult(const QString& result);
     void displaySelectedImage(const QPixmap& pixmap);
+    
+    // 摄像头相关
+    void recognizeFromVideoFrame();
+    void checkCameraPermissions();  // 新增
+    void debugCameraInfo();         // 新增
 
     // UI组件 - 主界面
     QWidget* m_centralWidget;
@@ -80,7 +107,24 @@ class MainWindow : public QMainWindow
     QTextEdit* m_resultTextEdit;
     QLabel* m_statusLabel;
     
+    // UI组件 - 摄像头识别
+    QWidget* m_cameraWidget;
+    QComboBox* m_cameraComboBox;
+    QPushButton* m_toggleCameraButton;
+    QPushButton* m_captureButton;
+    QVideoWidget* m_videoWidget;
+    QLabel* m_cameraStatusLabel;
+    QTextEdit* m_cameraResultTextEdit;
+    
     // 网络相关
     QNetworkAccessManager* m_networkManager;
     QNetworkReply* m_currentReply;
+    
+    // 摄像头相关
+    QCamera* m_camera;
+    QImageCapture* m_imageCapture;
+    QMediaCaptureSession* m_captureSession;
+    QTimer* m_recognitionTimer;
+    bool m_cameraActive;
+    QList<QCameraDevice> m_availableCameras;
 };
