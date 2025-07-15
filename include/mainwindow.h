@@ -9,6 +9,11 @@
 #include "WriteBarcode.h"
 #include "BarcodeFormat.h"
 #include "BitMatrix.h"
+
+#ifndef ZXING_EXPERIMENTAL_API
+#include "CharacterSet.h"
+#endif
+
 class MainWindow : public QMainWindow
 {
     Q_OBJECT

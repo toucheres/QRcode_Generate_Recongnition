@@ -9,6 +9,8 @@
 #include <QLineEdit>
 #include <QPainter>
 #include <QPixmap>
+#include <QDebug>
+#include <QTextCodec>
 
 // ZXing includes
 #ifdef ZXING_EXPERIMENTAL_API
@@ -53,7 +55,7 @@ void MainWindow::setupUI()
     
     // 创建输入框
     m_textInput = new QLineEdit(this);
-    m_textInput->setPlaceholderText("请输入要生成二维码的文本...");
+    m_textInput->setPlaceholderText("请输入要生成二维码的文本（支持中文）...");
     m_textInput->setStyleSheet("QLineEdit { font-size: 14px; padding: 10px; margin: 10px 0; }");
     
     // 创建生成按钮
@@ -87,11 +89,22 @@ void MainWindow::onGenerateQRCode()
         return;
     }
     
+    // 显示输入文本的调试信息
+    qDebug() << "Input text:" << text;
+    qDebug() << "Text length:" << text.length();
+    qDebug() << "UTF-8 bytes:" << text.toUtf8().toHex();
+    
     try {
         QPixmap qrPixmap = generateQRCodePixmap(text);
         if (!qrPixmap.isNull()) {
             m_qrCodeLabel->setPixmap(qrPixmap);
             m_qrCodeLabel->setText("");
+            
+            // 显示成功信息
+            QString info = QString("二维码生成成功！\n文本：%1\n长度：%2 字符")
+                          .arg(text)
+                          .arg(text.length());
+            QMessageBox::information(this, "成功", info);
         } else {
             QMessageBox::critical(this, "错误", "生成二维码失败！");
         }
@@ -103,7 +116,12 @@ void MainWindow::onGenerateQRCode()
 QPixmap MainWindow::generateQRCodePixmap(const QString& text)
 {
     try {
-        std::string stdText = text.toStdString();
+        // 确保使用UTF-8编码
+        QByteArray utf8Data = text.toUtf8();
+        std::string stdText = utf8Data.toStdString();
+        
+        qDebug() << "Generating QR code for UTF-8 text:" << QString::fromUtf8(utf8Data);
+        qDebug() << "std::string size:" << stdText.size();
         
 #ifdef ZXING_EXPERIMENTAL_API
         // 使用实验性API
@@ -112,6 +130,7 @@ QPixmap MainWindow::generateQRCodePixmap(const QString& text)
         
         auto barcode = ZXing::CreateBarcodeFromText(stdText, options);
         if (!barcode.isValid()) {
+            qDebug() << "Failed to create barcode";
             return QPixmap();
         }
         
@@ -130,7 +149,12 @@ QPixmap MainWindow::generateQRCodePixmap(const QString& text)
         writer.setMargin(2);
         writer.setEccLevel(1); // 错误纠正级别 M
         
+        // 设置编码为UTF-8以支持中文字符
+        writer.setEncoding(ZXing::CharacterSet::UTF8);
+        
         auto bitMatrix = writer.encode(stdText, 300, 300);
+        qDebug() << "BitMatrix size:" << bitMatrix.width() << "x" << bitMatrix.height();
+        
         return zxingMatrixToQPixmap(bitMatrix);
 #endif
         
