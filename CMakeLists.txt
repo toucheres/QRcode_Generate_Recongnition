@@ -6,7 +6,7 @@ elseif(UNIX)
     project(QRcode_Generate_Recongnise)
 endif()
 
-set(CMAKE_CONFIGURATION_TYPES "Release;RelWithDebInfo" CACHE STRING "" FORCE)
+set(CMAKE_CONFIGURATION_TYPES "Release;RelWithDebInfo;Debug" CACHE STRING "" FORCE)
 
 # 设置C++标准
 set(CMAKE_CXX_STANDARD 17)
@@ -25,46 +25,52 @@ find_package(Qt6 REQUIRED COMPONENTS Network)
 find_package(Qt6 REQUIRED COMPONENTS Multimedia)
 find_package(Qt6 REQUIRED COMPONENTS MultimediaWidgets)
 
-#=================== INCLUSION OF Project Files ====================#
-set(FORMS_DIR "${CMAKE_SOURCE_DIR}/forms")
-set(INCLUDE_DIR "${CMAKE_SOURCE_DIR}/include")
-set(SOURCE_DIR "${CMAKE_SOURCE_DIR}/src")
+# 添加头文件目录
+include_directories(include)
 
-# 添加ZXing库路径
-set(ZXING_DIR "${CMAKE_SOURCE_DIR}/3rd/zxing")
-add_subdirectory(${ZXING_DIR})
+# 修改 ZXing 配置，禁用 stb 下载
+set(BUILD_EXAMPLES OFF CACHE BOOL "Build examples")
+set(BUILD_BLACKBOX_TESTS OFF CACHE BOOL "Build blackbox tests")
 
-include_directories(${FORMS_DIR})
-include_directories(${INCLUDE_DIR})
-include_directories(${SOURCE_DIR})
+# 直接添加 ZXing 核心库而不依赖 stb
+add_subdirectory(3rd/zxing/core)
 
-file(GLOB_RECURSE SOURCES
-    "${FORMS_DIR}/*.ui"
-    "${FORMS_DIR}/*.qrc"
-    "${INCLUDE_DIR}/*.h"
-    "${SOURCE_DIR}/*.cpp"
+# 源文件
+set(SOURCES
+    src/main.cpp
+    src/mainwindow.cpp
 )
 
-#=================== SETUP EXECTUABLE ====================#
-# Enable debug logging on RELWITHDEBINFO configuration
-set_property(DIRECTORY APPEND PROPERTY COMPILE_DEFINITIONS
-    $<$<CONFIG:RELWITHDEBINFO>:QT_MESSAGELOGCONTEXT>
+# 头文件
+set(HEADERS
+    include/mainwindow.h
 )
 
-# Add the forms directory to the AUTOUIC search paths
-set(CMAKE_AUTOUIC_SEARCH_PATHS ${CMAKE_AUTOUIC_SEARCH_PATHS} ${FORMS_DIR})
+# 创建可执行文件
+add_executable(${PROJECT_NAME} ${SOURCES} ${HEADERS})
 
-# Add the executable
-if (WIN32) 
-    add_executable(QRcode_Generate_Recongnise WIN32 ${SOURCES})
-elseif(UNIX)
-    add_executable(QRcode_Generate_Recongnise ${SOURCES})
+# 链接库
+target_link_libraries(${PROJECT_NAME}
+    Qt6::Core
+    Qt6::Widgets
+    Qt6::Core5Compat
+    Qt6::Multimedia
+    Qt6::MultimediaWidgets
+    Qt6::Network
+    ZXing
+)
+
+# 设置目标属性
+set_target_properties(${PROJECT_NAME} PROPERTIES
+    WIN32_EXECUTABLE TRUE
+)
+
+# 复制 Qt 运行时库（Windows）
+if(WIN32)
+    find_program(WINDEPLOYQT_EXECUTABLE windeployqt HINTS ${Qt6_DIR}/../../../bin)
+    if(WINDEPLOYQT_EXECUTABLE)
+        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+            COMMAND ${WINDEPLOYQT_EXECUTABLE} $<TARGET_FILE:${PROJECT_NAME}>
+            COMMENT "Deploying Qt libraries")
+    endif()
 endif()
-
-# Add the target includes for QRcode_Generate_Recongnise 
-target_include_directories(QRcode_Generate_Recongnise PRIVATE ${FORMS_DIR})
-target_include_directories(QRcode_Generate_Recongnise PRIVATE ${INCLUDE_DIR})
-target_include_directories(QRcode_Generate_Recongnise PRIVATE ${SOURCE_DIR})
-
-#===================== LINKING LIBRARIES =======================#
-target_link_libraries(QRcode_Generate_Recongnise Qt6::Core Qt6::Widgets Qt6::Core5Compat Qt6::Network Qt6::Multimedia Qt6::MultimediaWidgets ZXing::ZXing)

@@ -26,8 +26,8 @@
 
 // ZXing includes
 #ifdef ZXING_EXPERIMENTAL_API
-#include "ZXing/WriteBarcode.h"
-#include "ZXing/BarcodeFormat.h"
+#include "WriteBarcode.h"
+#include "BarcodeFormat.h"
 #else
 #include "MultiFormatWriter.h"
 #include "BitMatrix.h"
