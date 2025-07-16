@@ -38,6 +38,89 @@
 #include "MultiFormatWriter.h"
 #endif
 #include <iostream>
+#include<QSvgGenerator>
+//保存槽函数
+void MainWindow::onSaveQRCode()
+{
+    // 检查 QLabel 是否已初始化
+    if (!m_qrCodeLabel) {
+        QMessageBox::warning(this, "错误", "QLabel 未初始化！");
+        return;     
+    }
+
+    // 获取 QLabel 中的图片
+    const QPixmap* currentPixmap = new QPixmap{ m_qrCodeLabel->pixmap()};
+    if (!currentPixmap || currentPixmap->isNull()) {
+        QMessageBox::warning(this, "保存失败", "请先生成二维码！");
+        return;
+    }
+
+    // 创建副本
+    QPixmap pixmapToSave = *currentPixmap;
+
+    QString fileName = QFileDialog::getSaveFileName(
+        this,
+        tr("保存二维码图片"),
+        "",
+        tr("PNG 图片 (*.png);;JPEG 图片 (*.jpg);;SVG 矢量图 (*.svg)")
+    );
+    
+    if (fileName.isEmpty())
+        return;
+
+    bool success = false;
+    if (fileName.endsWith(".svg", Qt::CaseInsensitive)) {
+        QSvgGenerator svgGen;
+        svgGen.setFileName(fileName);
+        svgGen.setSize(pixmapToSave.size());
+        svgGen.setViewBox(QRect(0, 0, pixmapToSave.width(), pixmapToSave.height()));
+        QPainter painter(&svgGen);
+        painter.drawPixmap(0, 0, pixmapToSave);
+        painter.end();
+        success = true;
+    } else {
+        success = pixmapToSave.save(fileName);
+    }
+
+    if (success)
+        QMessageBox::information(this, "保存成功", "二维码图片已保存！");
+    else
+        QMessageBox::warning(this, "保存失败", "保存二维码图片失败！");
+}
+//保存按钮实现
+void MainWindow::onGenerateQRCode()
+{
+    QString text = m_textInput->text().trimmed();
+    if (text.isEmpty())
+    {
+        QMessageBox::warning(this, "警告", "请输入要生成二维码的文本！");
+        return;
+    }
+
+    // 生成二维码
+    QPixmap qrPixmap = generateQRCodePixmap(text);
+    
+    if (qrPixmap.isNull())
+    {
+        QMessageBox::warning(this, "错误", "二维码生成失败！");
+        return;
+    }
+
+    // 如果启用了Logo嵌入
+    if (m_embedLogoCheckBox->isChecked() && !m_logoPixmap.isNull())
+    {
+        int logoSize = m_logoSizeSlider->value();
+        qrPixmap = embedLogoInQRCode(qrPixmap, m_logoPixmap, logoSize);
+    }
+
+    // 显示生成的二维码
+    m_qrCodeLabel->setPixmap(qrPixmap.scaled(m_qrCodeLabel->size(), 
+        Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    m_qrCodeLabel->setText("");
+    
+    // 启用保存按钮
+    m_saveQRCodeButton->setEnabled(true);
+}
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent), m_centralWidget(nullptr), m_tabWidget(nullptr),
@@ -131,7 +214,10 @@ void MainWindow::setupGenerateMode()
     m_generateTitleLabel->setAlignment(Qt::AlignCenter);
     m_generateTitleLabel->setStyleSheet(
         "QLabel { font-size: 24px; font-weight: bold; color: #333; margin: 20px; }");
-
+    // 按钮
+    m_generateButton = new QPushButton("生成二维码", m_generateWidget);
+    m_saveQRCodeButton = new QPushButton("保存二维码", m_generateWidget);
+    m_saveQRCodeButton->setEnabled(false);
     // 输入框
     m_textInput = new QLineEdit(m_generateWidget);
     m_textInput->setPlaceholderText("请输入要生成二维码的文本（支持中文）...");
@@ -272,13 +358,20 @@ void MainWindow::setupGenerateMode()
     connect(m_embedLogoCheckBox, &QCheckBox::toggled, this, &MainWindow::onEmbedLogoChanged);
     connect(m_selectLogoButton, &QPushButton::clicked, this, &MainWindow::onSelectLogoImage);
     connect(m_logoSizeSlider, &QSlider::valueChanged, this, &MainWindow::onLogoSizeChanged);
-
+    connect(m_generateButton, &QPushButton::clicked, this, &MainWindow::onGenerateQRCode);
+    connect(m_saveQRCodeButton, &QPushButton::clicked, this, &MainWindow::onSaveQRCode);
     // 布局
     // layout->addWidget(m_qrformat);
     layout->addWidget(m_generateTitleLabel);
     layout->addWidget(m_textInput);
     layout->addWidget(m_qrOptionsGroup);
     layout->addWidget(m_generateButton, 0, Qt::AlignCenter);
+    layout->addWidget(m_qrCodeLabel, 0, Qt::AlignCenter);
+    layout->addStretch();
+    QHBoxLayout* buttonLayout = new QHBoxLayout();
+    buttonLayout->addWidget(m_generateButton);
+    buttonLayout->addWidget(m_saveQRCodeButton);
+    layout->addLayout(buttonLayout);
     layout->addWidget(m_qrCodeLabel, 0, Qt::AlignCenter);
     layout->addStretch();
 }
@@ -948,150 +1041,7 @@ void MainWindow::onLogoSizeChanged(int size)
     m_logoSizeLabel->setText(QString("%1%").arg(size));
 }
 
-void MainWindow::onGenerateQRCode()
-{
-    QString text = m_textInput->text().trimmed();
-    if (text.isEmpty())
-    {
-        QMessageBox::warning(this, "警告", "请输入要生成二维码的文本！");
-        return;
-    }
 
-    // 检查文本长度，避免过长文本
-    if (text.length() > 1000)
-    {
-        QMessageBox::warning(this, "警告", "输入文本过长，请控制在1000个字符以内！");
-        return;
-    }
-
-    // 检查Logo嵌入设置
-    if (m_embedLogoCheckBox->isChecked() && m_logoPixmap.isNull())
-    {
-        QMessageBox::warning(
-            this, "警告", "已启用Logo嵌入但未选择Logo图片！\n请选择Logo图片或取消Logo嵌入选项。");
-        return;
-    }
-
-    // 显示输入文本的调试信息
-    qDebug() << "=== QR Code Generation Started ===";
-    qDebug() << "Input text:" << text;
-    qDebug() << "Text length:" << text.length();
-    qDebug() << "UTF-8 bytes:" << text.toUtf8().toHex();
-    qDebug() << "Error correction level:" << m_errorCorrectionCombo->currentData().toString();
-    qDebug() << "QR size:" << m_qrSizeSpinBox->value();
-    qDebug() << "Embed logo:" << m_embedLogoCheckBox->isChecked();
-
-    // 尝试多级回退生成
-    QPixmap qrPixmap;
-    QString errorMsg;
-
-    // 第一次尝试：使用用户设置的参数
-    try
-    {
-        qDebug() << "Attempting primary generation method...";
-        qrPixmap = generateQRCodePixmap(text);
-        if (!qrPixmap.isNull())
-        {
-            qDebug() << "Primary generation successful";
-        }
-    }
-    catch (const std::exception& e)
-    {
-        errorMsg = QString("主要方法失败: %1").arg(e.what());
-        qDebug() << errorMsg;
-    }
-
-    // 第二次尝试：使用备用方法
-    if (qrPixmap.isNull())
-    {
-        qDebug() << "Primary method failed, trying fallback...";
-        try
-        {
-            QString ecLevel = m_errorCorrectionCombo->currentData().toString();
-            int qrSize = m_qrSizeSpinBox->value();
-            qrPixmap = generateQRCodeWithFallback(text, ecLevel, qrSize);
-            if (!qrPixmap.isNull())
-            {
-                qDebug() << "Fallback generation successful";
-            }
-        }
-        catch (const std::exception& e)
-        {
-            errorMsg += QString("\n备用方法失败: %1").arg(e.what());
-            qDebug() << "Fallback failed:" << e.what();
-        }
-    }
-
-    // 第三次尝试：使用最简化方法
-    if (qrPixmap.isNull())
-    {
-        qDebug() << "Fallback failed, trying minimal method...";
-        try
-        {
-            qrPixmap = generateMinimalQRCode(text);
-            if (!qrPixmap.isNull())
-            {
-                qDebug() << "Minimal generation successful";
-                QMessageBox::information(
-                    this, "提示", "使用简化参数生成二维码成功。\n如需自定义参数，请检查输入内容。");
-            }
-        }
-        catch (const std::exception& e)
-        {
-            errorMsg += QString("\n最简方法失败: %1").arg(e.what());
-            qDebug() << "Minimal method failed:" << e.what();
-        }
-    }
-
-    // 如果所有方法都失败，显示错误图像
-    if (qrPixmap.isNull())
-    {
-        qDebug() << "All generation methods failed, showing error image";
-        qrPixmap = createErrorQRCode();
-        QMessageBox::critical(this, "错误",
-                              QString("二维码生成失败！\n\n错误详情：\n%1\n\n建议：\n1. "
-                                      "简化输入文本\n2. 检查文本编码\n3. 重启应用程序")
-                                  .arg(errorMsg));
-    }
-
-    // 应用Logo嵌入（如果成功生成了二维码且不是错误图像）
-    if (!qrPixmap.isNull() && m_embedLogoCheckBox->isChecked() && !m_logoPixmap.isNull())
-    {
-        try
-        {
-            qrPixmap = embedLogoInQRCode(qrPixmap, m_logoPixmap, m_logoSizeSlider->value());
-        }
-        catch (const std::exception& e)
-        {
-            qDebug() << "Logo embedding failed:" << e.what();
-            QMessageBox::warning(this, "警告", "Logo嵌入失败，显示无Logo版本。");
-        }
-    }
-
-    // 显示结果
-    if (!qrPixmap.isNull())
-    {
-        m_qrCodeLabel->setPixmap(qrPixmap);
-        m_qrCodeLabel->setText("");
-
-        // 只有在非错误图像时才显示成功信息
-        if (qrPixmap.width() > 200 || qrPixmap.height() > 200)
-        {
-            QString info = QString("二维码生成成功！\n文本：%1\n长度：%2 字符")
-                               .arg(text.length() > 50 ? text.left(50) + "..." : text)
-                               .arg(text.length());
-
-            if (m_embedLogoCheckBox->isChecked() && !m_logoPixmap.isNull())
-            {
-                info += QString("\nLogo大小：%1%").arg(m_logoSizeSlider->value());
-            }
-
-            QMessageBox::information(this, "成功", info);
-        }
-    }
-
-    qDebug() << "=== QR Code Generation Completed ===";
-}
 
 QPixmap MainWindow::generateQRCodePixmap(const QString& text)
 {

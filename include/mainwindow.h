@@ -54,11 +54,12 @@ class MainWindow : public QMainWindow
 
   private slots:
     // 生成模式
+    void onSaveQRCode(); // 新增：保存二维码图片槽函数
     void onGenerateQRCode();
     void onSelectLogoImage();  // 新增：选择中心图片
     void onEmbedLogoChanged(bool enabled);  // 新增：启用/禁用图片嵌入
     void onLogoSizeChanged(int size);  // 新增：调整图片大小
-    
+  
     // 识别模式
     void onSelectImageFile();
     void onLoadFromUrl();
@@ -90,8 +91,10 @@ class MainWindow : public QMainWindow
     void startCamera();
     void stopCamera();
     void updateCameraList();
-    
+   
     // 生成相关
+    QLabel* m_qrCodeLabel;//新增：保存槽函数
+    QPushButton* m_saveQRCodeButton; // 新增：保存二维码按钮
     QPixmap generateQRCodePixmap(const QString& text);
     QPixmap zxingMatrixToQPixmap(const ZXing::BitMatrix& matrix);
     QPixmap embedLogoInQRCode(const QPixmap& qrCode, const QPixmap& logo, int logoSizePercent = 20);  // 新增
@@ -129,7 +132,7 @@ class MainWindow : public QMainWindow
     QLabel* m_generateTitleLabel;
     QLineEdit* m_textInput;
     QPushButton* m_generateButton;
-    QLabel* m_qrCodeLabel;
+    
     
     // 新增：二维码生成选项控件
     QGroupBox* m_qrOptionsGroup;
