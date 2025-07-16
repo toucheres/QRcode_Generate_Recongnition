@@ -1,52 +1,72 @@
-# QR码生成识别器
+# QR码生成识别器 v2.0
 
-一个基于Qt6和ZXing-C++库开发的QR码生成应用程序，支持中文等UTF-8字符。
+一个基于Qt6和ZXing-C++库开发的现代化QR码生成和识别应用程序，采用模块化架构设计。
 
-## 功能特性
+## 🎯 功能特性
 
-- ✅ 生成QR码
+### 二维码生成
+- ✅ 支持多种二维码格式（QR Code, Micro QR等）
+- ✅ 四级错误纠正级别支持（L, M, Q, H）
+- ✅ 自定义尺寸设置（100px - 1000px）
+- ✅ Logo嵌入功能，可调节Logo大小
 - ✅ 支持中文、日文、韩文等UTF-8字符
-- ✅ 简洁易用的图形界面
-- ✅ 实时预览生成的二维码
-- ✅ 多种错误纠正级别支持
-- 🔄 识别QR码（计划中）
+- ✅ 多种格式导出（PNG, JPEG, BMP, SVG）
 
-## 技术栈
+### 二维码识别（开发中）
+- 🔄 图片文件识别
+- 🔄 摄像头实时识别
+- 🔄 批量识别处理
+- 🔄 识别结果轮廓显示
 
+### 用户界面
+- ✅ 现代化Material Design风格界面
+- ✅ 标签页式多功能布局
+- ✅ 响应式设计，适配不同屏幕尺寸
+- ✅ 支持键盘快捷键
+- ✅ 状态栏实时反馈
+
+## 🏗️ 技术架构
+
+### 核心技术栈
 - **Qt6** - 跨平台GUI框架
-- **ZXing-C++** - 高性能的条码处理库
-- **CMake** - 构建系统
-- **C++17** - 编程语言标准
+- **ZXing-C++** - 高性能条码处理库
+- **CMake 3.16+** - 现代化构建系统
+- **C++17** - 现代C++标准
 
-## 系统要求
+### 模块化架构
+
+```
+src/
+├── core/                   # 核心业务逻辑
+│   ├── QRCodeGenerator.*   # 二维码生成器
+│   └── QRCodeRecognizer.*  # 二维码识别器
+├── gui/                    # 用户界面组件
+│   ├── BaseWidget.*        # UI基类
+│   ├── GeneratorWidget.*   # 生成器界面
+│   └── MainWindow.*        # 主窗口
+├── utils/                  # 工具类
+│   └── AppUtils.*          # 应用工具函数
+└── main.cpp               # 程序入口
+
+include/                   # 头文件（对应src结构）
+forms/                     # UI资源文件
+docs/                      # 文档
+tests/                     # 测试用例（预留）
+3rd/zxing/                # ZXing-C++第三方库
+```
+
+## 🔧 系统要求
 
 ### 开发环境
-- CMake 3.14 或更高版本
-- C++17 兼容的编译器
-  - Windows: Visual Studio 2019 或更高版本
+- **CMake**: 3.16 或更高版本
+- **编译器**: 支持C++17的编译器
+  - Windows: Visual Studio 2019+ 或 MinGW-w64
   - Linux: GCC 7+ 或 Clang 5+
   - macOS: Xcode 10+
 
 ### 运行时依赖
-- Qt6 Core
-- Qt6 Widgets
-- Qt6 Core5Compat
-
-## 项目结构
-
-```
-QRcode_Generate_Recongnition/
-├── 3rd/                    # 第三方库
-│   └── zxing/              # ZXing-C++ 库
-├── include/                # 头文件
-│   └── mainwindow.h
-├── src/                    # 源文件
-│   ├── main.cpp
-│   └── mainwindow.cpp
-├── forms/                  # UI文件 (预留)
-├── CMakeLists.txt          # CMake 构建配置
-└── README.md               # 项目说明
-```
+- **Qt6**: Core, Widgets, MultimediaWidgets, Multimedia, Core5Compat, Svg
+- **操作系统**: Windows 10+, Ubuntu 18.04+, macOS 10.14+
 
 ## 安装和构建
 
