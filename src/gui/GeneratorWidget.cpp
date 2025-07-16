@@ -205,28 +205,33 @@ void GeneratorWidget::onGenerateClicked()
     
     // 如果启用了logo嵌入
     if (m_embedLogoCheckBox->isChecked() && !m_logoPixmap.isNull()) {
-        // 先生成基础二维码
-        QPixmap baseQRCode = m_generator->generateQRCode(config);
+        // 先生成基础二维码（不包含自定义文本）
+        QRCodeGenerator::GenerationConfig baseConfig = config;
+        baseConfig.enableCustomText = false; // 暂时禁用自定义文本
+        
+        QPixmap baseQRCode = m_generator->generateQRCode(baseConfig);
         if (!baseQRCode.isNull()) {
             // 嵌入logo
             int logoSize = m_logoSizeSlider->value();
-            finalQRCode = m_generator->embedLogo(baseQRCode, m_logoPixmap, logoSize);
+            QPixmap logoQRCode = m_generator->embedLogo(baseQRCode, m_logoPixmap, logoSize);
+            
+            // 如果启用了自定义文本，在logo嵌入后添加文本
+            if (config.enableCustomText && !config.customText.isEmpty()) {
+                finalQRCode = m_generator->addCustomText(logoQRCode, config);
+            } else {
+                finalQRCode = logoQRCode;
+            }
         } else {
             showError(m_generator->getLastError());
             return;
         }
     } else {
-        // 生成基础二维码
+        // 直接生成二维码（包含自定义文本）
         finalQRCode = m_generator->generateQRCode(config);
         if (finalQRCode.isNull()) {
             showError(m_generator->getLastError());
             return;
         }
-    }
-    
-    // 如果启用了自定义文本，添加文本
-    if (config.enableCustomText && !config.customText.isEmpty()) {
-        finalQRCode = m_generator->addCustomText(finalQRCode, config);
     }
     
     showGeneratedQRCode(finalQRCode);

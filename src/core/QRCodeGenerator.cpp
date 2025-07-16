@@ -324,50 +324,55 @@ QPixmap QRCodeGenerator::addCustomText(const QPixmap& barcode, const GenerationC
     QFont font("Arial", config.textSize, QFont::Bold);
     QFontMetrics fontMetrics(font);
     
-    // 计算文本尺寸
-    QString text = config.customText;
+    // 计算文本尺寸 - 使用单行文本
+    QString text = config.customText.trimmed(); // 去除首尾空格
+    // 移除换行符，确保单行显示
+    text = text.replace('\n', ' ').replace('\r', ' ');
+    
     QRect textRect = fontMetrics.boundingRect(text);
     int textWidth = textRect.width();
-    int textHeight = textRect.height();
+    int textHeight = fontMetrics.height(); // 使用字体高度而不是边界高度
     
     // 计算最终图像尺寸
     QSize finalSize;
     QPoint barcodePos;
     QPoint textPos;
     
-    const int padding = 10; // 文本与条码间的间距
+    const int padding = 15; // 文本与条码间的间距
+    const int margin = 10;  // 边距
     
     switch (config.textPosition) {
         case TextPosition::Bottom:
-            finalSize = QSize(qMax(barcode.width(), textWidth + 20), 
-                             barcode.height() + textHeight + padding + 10);
-            barcodePos = QPoint((finalSize.width() - barcode.width()) / 2, 5);
+            finalSize = QSize(qMax(barcode.width(), textWidth + margin * 2), 
+                             barcode.height() + textHeight + padding + margin);
+            barcodePos = QPoint((finalSize.width() - barcode.width()) / 2, margin / 2);
             textPos = QPoint((finalSize.width() - textWidth) / 2, 
-                           barcode.height() + padding + textHeight);
+                           barcode.height() + padding + fontMetrics.ascent());
             break;
             
         case TextPosition::Top:
-            finalSize = QSize(qMax(barcode.width(), textWidth + 20), 
-                             barcode.height() + textHeight + padding + 10);
+            finalSize = QSize(qMax(barcode.width(), textWidth + margin * 2), 
+                             barcode.height() + textHeight + padding + margin);
             barcodePos = QPoint((finalSize.width() - barcode.width()) / 2, 
-                               textHeight + padding + 5);
-            textPos = QPoint((finalSize.width() - textWidth) / 2, textHeight);
+                               textHeight + padding);
+            textPos = QPoint((finalSize.width() - textWidth) / 2, fontMetrics.ascent());
             break;
             
         case TextPosition::Left:
-            finalSize = QSize(barcode.width() + textWidth + padding + 20, 
-                             qMax(barcode.height(), textHeight + 10));
-            barcodePos = QPoint(textWidth + padding + 10, 
+            finalSize = QSize(barcode.width() + textWidth + padding + margin * 2, 
+                             qMax(barcode.height(), textHeight) + margin);
+            barcodePos = QPoint(textWidth + padding + margin, 
                                (finalSize.height() - barcode.height()) / 2);
-            textPos = QPoint(5, (finalSize.height() + textHeight) / 2);
+            textPos = QPoint(margin, 
+                           (finalSize.height() + fontMetrics.ascent()) / 2);
             break;
             
         case TextPosition::Right:
-            finalSize = QSize(barcode.width() + textWidth + padding + 20, 
-                             qMax(barcode.height(), textHeight + 10));
-            barcodePos = QPoint(5, (finalSize.height() - barcode.height()) / 2);
-            textPos = QPoint(barcode.width() + padding + 5, 
-                           (finalSize.height() + textHeight) / 2);
+            finalSize = QSize(barcode.width() + textWidth + padding + margin * 2, 
+                             qMax(barcode.height(), textHeight) + margin);
+            barcodePos = QPoint(margin, (finalSize.height() - barcode.height()) / 2);
+            textPos = QPoint(barcode.width() + padding + margin, 
+                           (finalSize.height() + fontMetrics.ascent()) / 2);
             break;
     }
     
@@ -382,10 +387,12 @@ QPixmap QRCodeGenerator::addCustomText(const QPixmap& barcode, const GenerationC
     // 绘制条码
     painter.drawPixmap(barcodePos, barcode);
     
-    // 绘制文本
+    // 绘制文本 - 使用单行绘制
     painter.setFont(font);
     painter.setPen(config.textColor);
     painter.drawText(textPos, text);
+    
+    painter.end(); // 确保绘制完成
     
     return result;
 }
