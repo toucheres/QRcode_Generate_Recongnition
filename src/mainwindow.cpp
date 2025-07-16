@@ -37,20 +37,22 @@
 #include "BitMatrix.h"
 #include "MultiFormatWriter.h"
 #endif
+#include <QSvgGenerator>
 #include <iostream>
-#include<QSvgGenerator>
-//保存槽函数
+// 保存槽函数
 void MainWindow::onSaveQRCode()
 {
     // 检查 QLabel 是否已初始化
-    if (!m_qrCodeLabel) {
+    if (!m_qrCodeLabel)
+    {
         QMessageBox::warning(this, "错误", "QLabel 未初始化！");
-        return;     
+        return;
     }
 
     // 获取 QLabel 中的图片
-    const QPixmap* currentPixmap = new QPixmap{ m_qrCodeLabel->pixmap()};
-    if (!currentPixmap || currentPixmap->isNull()) {
+    const QPixmap* currentPixmap = new QPixmap{m_qrCodeLabel->pixmap()};
+    if (!currentPixmap || currentPixmap->isNull())
+    {
         QMessageBox::warning(this, "保存失败", "请先生成二维码！");
         return;
     }
@@ -58,18 +60,16 @@ void MainWindow::onSaveQRCode()
     // 创建副本
     QPixmap pixmapToSave = *currentPixmap;
 
-    QString fileName = QFileDialog::getSaveFileName(
-        this,
-        tr("保存二维码图片"),
-        "",
-        tr("PNG 图片 (*.png);;JPEG 图片 (*.jpg);;SVG 矢量图 (*.svg)")
-    );
-    
+    QString fileName =
+        QFileDialog::getSaveFileName(this, tr("保存二维码图片"), "",
+                                     tr("PNG 图片 (*.png);;JPEG 图片 (*.jpg);;SVG 矢量图 (*.svg)"));
+
     if (fileName.isEmpty())
         return;
 
     bool success = false;
-    if (fileName.endsWith(".svg", Qt::CaseInsensitive)) {
+    if (fileName.endsWith(".svg", Qt::CaseInsensitive))
+    {
         QSvgGenerator svgGen;
         svgGen.setFileName(fileName);
         svgGen.setSize(pixmapToSave.size());
@@ -78,7 +78,9 @@ void MainWindow::onSaveQRCode()
         painter.drawPixmap(0, 0, pixmapToSave);
         painter.end();
         success = true;
-    } else {
+    }
+    else
+    {
         success = pixmapToSave.save(fileName);
     }
 
@@ -87,7 +89,7 @@ void MainWindow::onSaveQRCode()
     else
         QMessageBox::warning(this, "保存失败", "保存二维码图片失败！");
 }
-//保存按钮实现
+// 保存按钮实现
 void MainWindow::onGenerateQRCode()
 {
     QString text = m_textInput->text().trimmed();
@@ -99,7 +101,7 @@ void MainWindow::onGenerateQRCode()
 
     // 生成二维码
     QPixmap qrPixmap = generateQRCodePixmap(text);
-    
+
     if (qrPixmap.isNull())
     {
         QMessageBox::warning(this, "错误", "二维码生成失败！");
@@ -114,10 +116,10 @@ void MainWindow::onGenerateQRCode()
     }
 
     // 显示生成的二维码
-    m_qrCodeLabel->setPixmap(qrPixmap.scaled(m_qrCodeLabel->size(), 
-        Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    m_qrCodeLabel->setPixmap(
+        qrPixmap.scaled(m_qrCodeLabel->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
     m_qrCodeLabel->setText("");
-    
+
     // 启用保存按钮
     m_saveQRCodeButton->setEnabled(true);
 }
@@ -137,7 +139,8 @@ MainWindow::MainWindow(QWidget* parent)
       m_clearHistoryButton(nullptr), m_recognitionHintLabel(nullptr), m_hintTimer(nullptr),
       m_autoActionsGroup(nullptr), m_autoOpenUrlCheckBox(nullptr), m_autoCopyCheckBox(nullptr),
       m_autoOpenUrlEnabled(false), m_autoCopyEnabled(false), m_recognizeActionsGroup(nullptr),
-      m_copyResultButton(nullptr), m_openUrlButton(nullptr)
+      m_copyResultButton(nullptr), m_openUrlButton(nullptr), m_imageProcessor(new ImageProcessor),
+      m_lastCaptureRequestId(-1), m_lastRecognitionTime(0), m_recognitionCount(0)
 {
     qDebug() << "MainWindow constructor started";
 
@@ -194,7 +197,8 @@ void MainWindow::setupUI()
     // 连接标签页切换信号
     connect(m_tabWidget, QOverload<int>::of(&QTabWidget::currentChanged), this,
             &MainWindow::onModeChanged);
-
+    connect(m_imageProcessor, &ImageProcessor::recognitionResult, this,
+            [this](const QString& res, int _t2) { this->onAsyncRecognitionResult(res, _t2); });
     mainLayout->addWidget(m_tabWidget);
 
     // 初始化网络管理器
@@ -281,7 +285,7 @@ void MainWindow::setupGenerateMode()
     QHBoxLayout* sizeLayout = new QHBoxLayout();
     QLabel* sizeLabel = new QLabel("二维码大小:");
     m_qrSizeSpinBox = new QSpinBox();
-    m_qrSizeSpinBox->setFixedSize(150,25);
+    m_qrSizeSpinBox->setFixedSize(150, 25);
     m_qrSizeSpinBox->setRange(100, 800);
     m_qrSizeSpinBox->setValue(300);
     m_qrSizeSpinBox->setSuffix(" px");
@@ -411,6 +415,7 @@ void MainWindow::setupRecognizeMode()
         "QPushButton { font-size: 14px; padding: 8px 16px; background-color: #17a2b8; color: "
         "white; border: none; border-radius: 3px; } QPushButton:hover { background-color: #138496; "
         "}");
+
     m_loadUrlButton->setEnabled(false);
 
     urlLayout->addWidget(urlLabel);
@@ -534,6 +539,7 @@ void MainWindow::setupCameraRecognition()
         "QPushButton { font-size: 12px; padding: 5px 10px; background-color: #6c757d; color: "
         "white; border: none; border-radius: 3px; } QPushButton:hover { background-color: #5a6268; "
         "}");
+
     connect(refreshButton, &QPushButton::clicked, this, &MainWindow::updateCameraList);
 
     cameraSelectLayout->addWidget(cameraLabel);
@@ -554,6 +560,7 @@ void MainWindow::setupCameraRecognition()
         "QPushButton { font-size: 14px; padding: 10px 20px; background-color: #007ACC; color: "
         "white; border: none; border-radius: 5px; } QPushButton:hover { background-color: #005a9e; "
         "}");
+
     m_captureButton->setEnabled(false);
 
     buttonLayout->addWidget(m_toggleCameraButton);
@@ -626,6 +633,7 @@ void MainWindow::setupCameraRecognition()
         "QPushButton { font-size: 12px; padding: 5px 10px; background-color: #dc3545; color: "
         "white; border: none; border-radius: 3px; } QPushButton:hover { background-color: #c82333; "
         "}");
+
     historyHeaderLayout->addWidget(historyLabel);
     historyHeaderLayout->addStretch();
     historyHeaderLayout->addWidget(m_clearHistoryButton);
@@ -806,6 +814,9 @@ void MainWindow::startCamera()
                     if (active)
                     {
                         m_cameraStatusLabel->setText("摄像头已启动 - 实时识别中...");
+
+                        // 启动异步图像处理器
+                        m_imageProcessor->start();
                     }
                 });
 
@@ -839,8 +850,11 @@ void MainWindow::startCamera()
                     m_captureButton->setEnabled(true);
                     m_cameraComboBox->setEnabled(false);
 
-                    // 启动实时识别定时器
+                    // 启动实时识别定时器 - 降低频率减少CPU占用
                     m_recognitionTimer->start();
+
+                    // 设置处理间隔为1.5秒，避免过于频繁的识别
+                    m_imageProcessor->setProcessingInterval(1500);
 
                     qDebug() << "Camera started successfully";
                 }
@@ -858,27 +872,34 @@ void MainWindow::startCamera()
     }
 }
 
-void MainWindow::stopCamera()
-{
-    if (m_camera)
-    {
-        m_camera->stop();
-        m_camera->deleteLater();
-        m_camera = nullptr;
-    }
+// void MainWindow::stopCamera()
+// {
+//     // 停止异步处理器
+//     if (m_imageProcessor)
+//     {
+//         m_imageProcessor->stop();
+//     }
 
-    m_recognitionTimer->stop();
+//     if (m_camera)
+//     {
+//         m_camera->stop();
+//         m_camera->deleteLater();
+//         m_camera = nullptr;
+//     }
 
-    m_cameraActive = false;
-    m_toggleCameraButton->setText("启动摄像头");
-    m_toggleCameraButton->setStyleSheet(
-        "QPushButton { font-size: 14px; padding: 10px 20px; background-color: #28a745; color: "
-        "white; border: none; border-radius: 5px; } QPushButton:hover { background-color: #218838; "
-        "}");
-    m_captureButton->setEnabled(false);
-    m_cameraComboBox->setEnabled(true);
-    m_cameraStatusLabel->setText("摄像头已停止");
-}
+//     m_recognitionTimer->stop();
+
+//     m_cameraActive = false;
+//     m_toggleCameraButton->setText("启动摄像头");
+//     m_toggleCameraButton->setStyleSheet(
+//         "QPushButton { font-size: 14px; padding: 10px 20px; background-color: #28a745; color: "
+//         "white; border: none; border-radius: 5px; } QPushButton:hover { background-color:
+//         #218838; "
+//         "}");
+//     m_captureButton->setEnabled(false);
+//     m_cameraComboBox->setEnabled(true);
+//     m_cameraStatusLabel->setText("摄像头已停止");
+// }
 
 void MainWindow::onCaptureImage()
 {
@@ -898,39 +919,40 @@ void MainWindow::onCameraChanged(int index)
     }
 }
 
-void MainWindow::onImageCaptured(int id, const QImage& image)
-{
-    Q_UNUSED(id)
+// void MainWindow::onImageCaptured(int id, const QImage& image)
+// {
+//     Q_UNUSED(id)
 
-    if (image.isNull())
-    {
-        return;
-    }
+//     if (image.isNull())
+//     {
+//         return;
+//     }
 
-    QString result = recognizeQRCodeFromImage(image);
+//     QString result = recognizeQRCodeFromImage(image);
 
-    // 更新实时结果显示
-    m_cameraResultTextEdit->clear();
-    if (result.startsWith("未找到") || result.startsWith("识别错误"))
-    {
-        m_cameraResultTextEdit->setStyleSheet("QTextEdit { color: #dc3545; }");
-        m_cameraResultTextEdit->setPlainText(QString("拍照识别结果：%1").arg(result));
-    }
-    else
-    {
-        m_cameraResultTextEdit->setStyleSheet("QTextEdit { color: #28a745; font-weight: bold; }");
-        m_cameraResultTextEdit->setPlainText(QString("拍照识别成功！\n内容：%1").arg(result));
+//     // 更新实时结果显示
+//     m_cameraResultTextEdit->clear();
+//     if (result.startsWith("未找到") || result.startsWith("识别错误"))
+//     {
+//         m_cameraResultTextEdit->setStyleSheet("QTextEdit { color: #dc3545; }");
+//         m_cameraResultTextEdit->setPlainText(QString("拍照识别结果：%1").arg(result));
+//     }
+//     else
+//     {
+//         m_cameraResultTextEdit->setStyleSheet("QTextEdit { color: #28a745; font-weight: bold;
+//         }");
+//         m_cameraResultTextEdit->setPlainText(QString("拍照识别成功！\n内容：%1").arg(result));
 
-        // 新增：添加到历史记录
-        addToHistory(result);
+//         // 新增：添加到历史记录
+//         addToHistory(result);
 
-        // 新增：处理自动操作
-        handleAutoActions(result);
+//         // 新增：处理自动操作
+//         handleAutoActions(result);
 
-        // 新增：显示识别提示
-        showRecognitionHint(result);
-    }
-}
+//         // 新增：显示识别提示
+//         showRecognitionHint(result);
+//     }
+// }
 
 void MainWindow::onCameraError(QCamera::Error error)
 {
@@ -952,14 +974,14 @@ void MainWindow::onCameraError(QCamera::Error error)
     stopCamera();
 }
 
-void MainWindow::onRecognitionTimerTimeout()
-{
-    // 实时识别（每秒触发一次）
-    if (m_cameraActive && m_imageCapture)
-    {
-        recognizeFromVideoFrame();
-    }
-}
+// void MainWindow::onRecognitionTimerTimeout()
+// {
+//     // 实时识别（每秒触发一次）
+//     if (m_cameraActive && m_imageCapture)
+//     {
+//         recognizeFromVideoFrame();
+//     }
+// }
 
 void MainWindow::recognizeFromVideoFrame()
 {
@@ -1041,8 +1063,6 @@ void MainWindow::onLogoSizeChanged(int size)
     m_logoSizeLabel->setText(QString("%1%").arg(size));
 }
 
-
-
 QPixmap MainWindow::generateQRCodePixmap(const QString& text)
 {
     try
@@ -1086,12 +1106,12 @@ QPixmap MainWindow::generateQRCodePixmap(const QString& text)
                         {"Aztec", ZXing::BarcodeFormat::Aztec},
                         {"PDF417", ZXing::BarcodeFormat::PDF417},
                         {"MaxiCode", ZXing::BarcodeFormat::MaxiCode},
-                        {"MicroQRCode", ZXing::BarcodeFormat::MicroQRCode},
-                        {"RMQRCode", ZXing::BarcodeFormat::RMQRCode},
-                        {"DataBar", ZXing::BarcodeFormat::DataBar},
-                        {"DataBarExpanded", ZXing::BarcodeFormat::DataBarExpanded},
-                        {"DataBarLimited", ZXing::BarcodeFormat::DataBarLimited},
-                        {"DXFilmEdge", ZXing::BarcodeFormat::DXFilmEdge}};
+                        {"Micro QR", ZXing::BarcodeFormat::MicroQRCode},
+                        {"RM QR", ZXing::BarcodeFormat::RMQRCode},
+                        {"GS1 DataBar", ZXing::BarcodeFormat::DataBar},
+                        {"GS1 DataBar Expanded", ZXing::BarcodeFormat::DataBarExpanded},
+                        {"GS1 DataBar Limited", ZXing::BarcodeFormat::DataBarLimited},
+                        {"DX Film Edge", ZXing::BarcodeFormat::DXFilmEdge}};
                     return trans[QString{this->m_qrformat->currentData().toString()}];
                 }());
             qDebug() << "CreatorOptions created successfully";
@@ -1402,6 +1422,7 @@ void MainWindow::onNetworkReplyFinished()
 
 void MainWindow::onModeChanged(int index)
 {
+    index_ = index;
     qDebug() << "Mode changed to:"
              << (index == 0 ? "Generate" : (index == 1 ? "Recognize" : "Camera"));
 
@@ -1427,21 +1448,144 @@ QString MainWindow::recognizeQRCodeFromImage(const QImage& image)
         ZXing::ImageView imageView(rgbImage.bits(), rgbImage.width(), rgbImage.height(),
                                    ZXing::ImageFormat::RGB, rgbImage.bytesPerLine());
 
-        ZXing::ReaderOptions options;
-        options.setFormats(ZXing::BarcodeFormat::QRCode);
-        options.setTryHarder(true);
-        options.setTryRotate(true);
+        // 定义常用的条码格式列表，按使用频率排序
+        std::vector<ZXing::BarcodeFormat> formatList = {
+            ZXing::BarcodeFormat::QRCode,      // 最常用的二维码
+            ZXing::BarcodeFormat::Code128,     // 常用一维码
+            ZXing::BarcodeFormat::Code39,      // 常用一维码
+            ZXing::BarcodeFormat::EAN13,       // 商品条码
+            ZXing::BarcodeFormat::DataMatrix,  // 数据矩阵
+            ZXing::BarcodeFormat::Aztec,       // 阿兹特克码
+            ZXing::BarcodeFormat::PDF417,      // PDF417
+            ZXing::BarcodeFormat::Code93,      // Code93
+            ZXing::BarcodeFormat::EAN8,        // EAN8
+            ZXing::BarcodeFormat::UPCA,        // UPC-A
+            ZXing::BarcodeFormat::UPCE,        // UPC-E
+            ZXing::BarcodeFormat::ITF,         // ITF
+            ZXing::BarcodeFormat::Codabar,     // Codabar
+            ZXing::BarcodeFormat::MicroQRCode, // 微型QR码
+            ZXing::BarcodeFormat::MaxiCode,    // MaxiCode
+        };
 
-        auto result = ZXing::ReadBarcode(imageView, options);
+        // 定义不同的识别配置，从宽松到严格
+        std::vector<std::function<void(ZXing::ReaderOptions&)>> configList = {
+            // 配置1：快速识别，只尝试常用格式
+            [](ZXing::ReaderOptions& opts)
+            {
+                opts.setFormats(ZXing::BarcodeFormat::QRCode | ZXing::BarcodeFormat::Code128 |
+                                ZXing::BarcodeFormat::Code39);
+                opts.setTryHarder(false);
+                opts.setTryRotate(false);
+                opts.setTryInvert(false);
+            },
 
-        if (result.isValid())
+            // 配置2：标准识别，更多格式
+            [](ZXing::ReaderOptions& opts)
+            {
+                opts.setFormats(ZXing::BarcodeFormat::QRCode | ZXing::BarcodeFormat::Code128 |
+                                ZXing::BarcodeFormat::Code39 | ZXing::BarcodeFormat::EAN13 |
+                                ZXing::BarcodeFormat::DataMatrix | ZXing::BarcodeFormat::Aztec);
+                opts.setTryHarder(true);
+                opts.setTryRotate(false);
+                opts.setTryInvert(false);
+            },
+
+            // 配置3：深度识别，启用旋转
+            [](ZXing::ReaderOptions& opts)
+            {
+                opts.setFormats(ZXing::BarcodeFormat::Any);
+                opts.setTryHarder(true);
+                opts.setTryRotate(true);
+                opts.setTryInvert(false);
+            },
+
+            // 配置4：最大努力识别，启用所有选项
+            [](ZXing::ReaderOptions& opts)
+            {
+                opts.setFormats(ZXing::BarcodeFormat::Any);
+                opts.setTryHarder(true);
+                opts.setTryRotate(true);
+                opts.setTryInvert(true);
+                opts.setTryDownscale(true);
+            }};
+
+        // 按配置依次尝试识别
+        for (size_t configIndex = 0; configIndex < configList.size(); ++configIndex)
         {
-            return QString::fromStdString(result.text());
+            ZXing::ReaderOptions options;
+            configList[configIndex](options);
+
+            qDebug() << "Trying recognition with config" << configIndex;
+
+            auto result = ZXing::ReadBarcode(imageView, options);
+
+            if (result.isValid())
+            {
+                QString recognizedText = QString::fromStdString(result.text());
+                QString formatName = QString::fromStdString(ToString(result.format()));
+
+                qDebug() << "Successfully recognized with config" << configIndex
+                         << "Format:" << formatName << "Text length:" << recognizedText.length();
+
+                // 返回格式信息和识别内容
+                return recognizedText;
+            }
         }
-        else
+
+        // 如果所有配置都失败，尝试单独测试每种格式
+        qDebug() << "Standard recognition failed, trying individual formats...";
+
+        for (const auto& format : formatList)
         {
-            return "未找到二维码或识别失败";
+            ZXing::ReaderOptions options;
+            options.setFormats(format);
+            options.setTryHarder(true);
+            options.setTryRotate(true);
+            options.setTryInvert(true);
+
+            auto result = ZXing::ReadBarcode(imageView, options);
+
+            if (result.isValid())
+            {
+                QString recognizedText = QString::fromStdString(result.text());
+                QString formatName = QString::fromStdString(ToString(result.format()));
+
+                qDebug() << "Successfully recognized with individual format test"
+                         << "Format:" << formatName << "Text length:" << recognizedText.length();
+
+                return recognizedText;
+            }
         }
+
+        // 最后尝试：降低图像质量后重试
+        qDebug() << "Trying with image preprocessing...";
+
+        // 尝试灰度化和对比度增强
+        QImage grayImage = rgbImage.convertToFormat(QImage::Format_Grayscale8);
+        ZXing::ImageView grayImageView(grayImage.bits(), grayImage.width(), grayImage.height(),
+                                       ZXing::ImageFormat::Lum, grayImage.bytesPerLine());
+
+        ZXing::ReaderOptions finalOptions;
+        finalOptions.setFormats(ZXing::BarcodeFormat::Any);
+        finalOptions.setTryHarder(true);
+        finalOptions.setTryRotate(true);
+        finalOptions.setTryInvert(true);
+        finalOptions.setTryDownscale(true);
+
+        auto finalResult = ZXing::ReadBarcode(grayImageView, finalOptions);
+
+        if (finalResult.isValid())
+        {
+            QString recognizedText = QString::fromStdString(finalResult.text());
+            QString formatName = QString::fromStdString(ToString(finalResult.format()));
+
+            qDebug() << "Successfully recognized with grayscale preprocessing"
+                     << "Format:" << formatName << "Text length:" << recognizedText.length();
+
+            return recognizedText;
+        }
+
+        return "未找到二维码或条码，请确保图片清晰且包含有效的码";
     }
     catch (const std::exception& e)
     {
@@ -2027,3 +2171,586 @@ void MainWindow::onOpenRecognizedUrl()
         qDebug() << "Exception opening URL in recognize mode:" << e.what();
     }
 }
+void MainWindow::onImageCaptured(int id, const QImage& image)
+{
+    Q_UNUSED(id)
+
+    if (image.isNull())
+    {
+        return;
+    }
+
+    // 检查是否为手动拍照
+    bool isManualCapture = (m_lastCaptureRequestId != id);
+
+    if (index_ != 2)
+    {
+        // 手动拍照：同步处理并显示结果
+        QString result = recognizeQRCodeFromImage(image);
+
+        // 更新实时结果显示
+        m_cameraResultTextEdit->clear();
+        if (result.startsWith("未找到") || result.startsWith("识别错误"))
+        {
+            m_cameraResultTextEdit->setStyleSheet("QTextEdit { color: #dc3545; }");
+            m_cameraResultTextEdit->setPlainText(QString("拍照识别结果：%1").arg(result));
+        }
+        else
+        {
+            m_cameraResultTextEdit->setStyleSheet(
+                "QTextEdit { color: #28a745; font-weight: bold; }");
+            m_cameraResultTextEdit->setPlainText(QString("拍照识别成功！\n内容：%1").arg(result));
+
+            // 新增：添加到历史记录
+            addToHistory(result);
+
+            // 新增：处理自动操作
+            handleAutoActions(result);
+
+            // 新增：显示识别提示
+            showRecognitionHint(result);
+        }
+
+        m_lastCaptureRequestId = id;
+    }
+    else
+    {
+        // 实时识别：异步处理
+        startAsyncRecognition(image);
+    }
+}
+
+// void MainWindow::onRecognitionTimerTimeout()
+// {
+//     // 实时识别（每秒触发一次）
+//     if (m_cameraActive && m_imageCapture)
+//     {
+//         // 避免过于频繁的捕获，检查上次识别时间
+//         qint64 currentTime = QDateTime::currentMSecsSinceEpoch();
+//         if (currentTime - m_lastRecognitionTime < 1000)
+//         { // 1秒内不重复识别
+//             return;
+//         }
+
+//         m_lastRecognitionTime = currentTime;
+//         m_imageCapture->capture();
+//     }
+// }
+
+void MainWindow::startAsyncRecognition(const QImage& image)
+{
+    if (!m_imageProcessor)
+    {
+        return;
+    }
+
+    // 将图像添加到异步处理队列
+    m_imageProcessor->addImage(image);
+}
+
+void MainWindow::onAsyncRecognitionResult(const QString& result, int requestId)
+{
+    Q_UNUSED(requestId)
+
+    // 更新识别计数
+    m_recognitionCount++;
+
+    // 只在识别成功时更新UI和执行操作
+    if (!result.startsWith("未找到") && !result.startsWith("识别错误"))
+    {
+        QMutexLocker locker(&m_recognitionMutex);
+
+        // 检查是否是新的识别结果
+        if (result != m_lastRecognizedContent)
+        {
+            // 更新实时结果显示
+            m_cameraResultTextEdit->clear();
+            m_cameraResultTextEdit->setStyleSheet(
+                "QTextEdit { color: #28a745; font-weight: bold; }");
+            m_cameraResultTextEdit->setPlainText(QString("实时识别成功！\n内容：%1").arg(result));
+
+            // 添加到历史记录
+            addToHistory(result);
+
+            // 处理自动操作
+            handleAutoActions(result);
+
+            // 显示识别提示
+            showRecognitionHint(result);
+
+            qDebug() << "Async recognition successful:" << result.left(50)
+                     << "requestId:" << requestId << "count:" << m_recognitionCount;
+        }
+    }
+
+    // 每100次识别输出一次性能统计
+    if (m_recognitionCount % 100 == 0)
+    {
+        qDebug() << "Recognition performance: processed" << m_recognitionCount << "images";
+    }
+}
+
+// 新增：QRRecognitionWorker 实现
+QRRecognitionWorker::QRRecognitionWorker(QObject* parent) : QObject(parent), m_shouldStop(false)
+{
+    qDebug() << "QRRecognitionWorker created in thread:" << QThread::currentThread();
+}
+
+QRRecognitionWorker::~QRRecognitionWorker()
+{
+    qDebug() << "QRRecognitionWorker destroyed";
+}
+
+void QRRecognitionWorker::processImage(const QImage& image, int requestId)
+{
+    QMutexLocker locker(&m_mutex);
+
+    if (m_shouldStop)
+    {
+        return;
+    }
+
+    qDebug() << "Worker processing image, requestId:" << requestId
+             << "thread:" << QThread::currentThread();
+
+    try
+    {
+        QString result = recognizeQRCodeFromImage(image);
+
+        if (!m_shouldStop)
+        {
+            emit recognitionCompleted(result, requestId);
+        }
+    }
+    catch (const std::exception& e)
+    {
+        if (!m_shouldStop)
+        {
+            emit recognitionFailed(QString("Recognition error: %1").arg(e.what()), requestId);
+        }
+    }
+}
+
+void QRRecognitionWorker::stop()
+{
+    QMutexLocker locker(&m_mutex);
+    m_shouldStop = true;
+    qDebug() << "QRRecognitionWorker stop requested";
+}
+
+QString QRRecognitionWorker::recognizeQRCodeFromImage(const QImage& image)
+{
+    // 这里复制原来MainWindow中的识别逻辑
+    try
+    {
+        // 转换为ZXing可以处理的格式
+        QImage rgbImage = image.convertToFormat(QImage::Format_RGB888);
+
+        ZXing::ImageView imageView(rgbImage.bits(), rgbImage.width(), rgbImage.height(),
+                                   ZXing::ImageFormat::RGB, rgbImage.bytesPerLine());
+
+        // 定义常用的条码格式列表，按使用频率排序
+        std::vector<ZXing::BarcodeFormat> formatList = {
+            ZXing::BarcodeFormat::QRCode,     // 最常用的二维码
+            ZXing::BarcodeFormat::Code128,    // 常用一维码
+            ZXing::BarcodeFormat::Code39,     // 常用一维码
+            ZXing::BarcodeFormat::EAN13,      // 商品条码
+            ZXing::BarcodeFormat::DataMatrix, // 数据矩阵
+        };
+
+        // 针对实时识别优化的配置
+        std::vector<std::function<void(ZXing::ReaderOptions&)>> configList = {
+            // 配置1：快速识别，只尝试QR码
+            [](ZXing::ReaderOptions& opts)
+            {
+                opts.setFormats(ZXing::BarcodeFormat::QRCode);
+                opts.setTryHarder(false);
+                opts.setTryRotate(false);
+                opts.setTryInvert(false);
+            },
+
+            // 配置2：中等速度，常用格式
+            [](ZXing::ReaderOptions& opts)
+            {
+                opts.setFormats(ZXing::BarcodeFormat::QRCode | ZXing::BarcodeFormat::Code128 |
+                                ZXing::BarcodeFormat::Code39 | ZXing::BarcodeFormat::EAN13);
+                opts.setTryHarder(true);
+                opts.setTryRotate(false);
+                opts.setTryInvert(false);
+            },
+        };
+
+        // 按配置依次尝试识别
+        for (size_t configIndex = 0; configIndex < configList.size(); ++configIndex)
+        {
+            ZXing::ReaderOptions options;
+            configList[configIndex](options);
+
+            auto result = ZXing::ReadBarcode(imageView, options);
+
+            if (result.isValid())
+            {
+                QString recognizedText = QString::fromStdString(result.text());
+                return recognizedText;
+            }
+        }
+
+        return "未找到二维码或条码";
+    }
+    catch (const std::exception& e)
+    {
+        return QString("识别错误：%1").arg(e.what());
+    }
+}
+
+// 新增：ImageProcessor 实现
+ImageProcessor::ImageProcessor(QObject* parent)
+    : QObject(parent), m_processTimer(new QTimer(this)), m_workerThread(nullptr), m_worker(nullptr),
+      m_currentRequestId(0), m_lastProcessedRequestId(-1)
+{
+    m_processTimer->setSingleShot(false);
+    m_processTimer->setInterval(PROCESSING_INTERVAL);
+    connect(m_processTimer, &QTimer::timeout, this, &ImageProcessor::processNextImage);
+    qDebug() << "ImageProcessor created in thread:" << QThread::currentThread();
+}
+
+ImageProcessor::~ImageProcessor()
+{
+    stop();
+}
+
+void ImageProcessor::addImage(const QImage& image)
+{
+    QMutexLocker locker(&m_queueMutex);
+
+    // 限制队列大小，丢弃旧图像
+    while (m_imageQueue.size() >= MAX_QUEUE_SIZE)
+    {
+        m_imageQueue.dequeue();
+        qDebug() << "Dropped old image from queue";
+    }
+
+    ImageRequest request;
+    request.image = image.copy(); // 深拷贝确保线程安全
+    request.requestId = ++m_currentRequestId;
+    request.timestamp = QDateTime::currentMSecsSinceEpoch();
+
+    m_imageQueue.enqueue(request);
+
+    qDebug() << "Added image to queue, requestId:" << request.requestId
+             << "queue size:" << m_imageQueue.size();
+}
+
+void ImageProcessor::start()
+{
+    if (m_workerThread)
+    {
+        qDebug() << "ImageProcessor already started";
+        return;
+    }
+
+    // 创建工作线程
+    m_workerThread = new QThread();
+    m_worker = new QRRecognitionWorker();
+    m_worker->moveToThread(m_workerThread);
+
+    // 连接信号槽
+    connect(this, &ImageProcessor::imageReady, m_worker, &QRRecognitionWorker::processImage);
+    connect(m_worker, &QRRecognitionWorker::recognitionCompleted, this,
+            &ImageProcessor::onRecognitionCompleted);
+    connect(m_worker, &QRRecognitionWorker::recognitionFailed, this,
+            &ImageProcessor::onRecognitionFailed);
+
+    // 启动线程和定时器
+    m_workerThread->start();
+    m_processTimer->start();
+
+    qDebug() << "ImageProcessor started, worker thread:" << m_workerThread;
+}
+
+void ImageProcessor::stop()
+{
+    if (m_processTimer)
+    {
+        m_processTimer->stop();
+    }
+
+    if (m_worker)
+    {
+        m_worker->stop();
+    }
+
+    if (m_workerThread)
+    {
+        m_workerThread->quit();
+        if (!m_workerThread->wait(3000))
+        {
+            qWarning() << "Worker thread did not finish within timeout, terminating";
+            m_workerThread->terminate();
+            m_workerThread->wait(1000);
+        }
+
+        delete m_worker;
+        m_worker = nullptr;
+
+        delete m_workerThread;
+        m_workerThread = nullptr;
+    }
+
+    QMutexLocker locker(&m_queueMutex);
+    m_imageQueue.clear();
+
+    qDebug() << "ImageProcessor stopped";
+}
+
+void ImageProcessor::setProcessingInterval(int ms)
+{
+    m_processTimer->setInterval(ms);
+    qDebug() << "Processing interval set to:" << ms << "ms";
+}
+
+void ImageProcessor::processNextImage()
+{
+    QMutexLocker locker(&m_queueMutex);
+
+    if (m_imageQueue.isEmpty() || !m_worker)
+    {
+        return;
+    }
+
+    ImageRequest request = m_imageQueue.dequeue();
+    locker.unlock();
+
+    // 检查图像是否太旧（超过5秒丢弃）
+    qint64 currentTime = QDateTime::currentMSecsSinceEpoch();
+    if (currentTime - request.timestamp > 5000)
+    {
+        qDebug() << "Dropped old image, requestId:" << request.requestId;
+        return;
+    }
+
+    qDebug() << "Processing image, requestId:" << request.requestId;
+    emit imageReady(request.image, request.requestId);
+}
+
+void ImageProcessor::onRecognitionCompleted(const QString& result, int requestId)
+{
+    // 确保只处理最新的识别结果
+    if (requestId > m_lastProcessedRequestId)
+    {
+        m_lastProcessedRequestId = requestId;
+        emit recognitionResult(result, requestId);
+        qDebug() << "Recognition completed, requestId:" << requestId
+                 << "result:" << result.left(50);
+    }
+    else
+    {
+        qDebug() << "Ignored old recognition result, requestId:" << requestId;
+    }
+}
+
+void ImageProcessor::onRecognitionFailed(const QString& error, int requestId)
+{
+    qDebug() << "Recognition failed, requestId:" << requestId << "error:" << error;
+    // 失败时也可以发送信号，但通常我们忽略失败的结果
+}
+
+// void MainWindow::startCamera()
+// {
+//     qDebug() << "Starting camera...";
+
+//     if (m_availableCameras.isEmpty())
+//     {
+//         QMessageBox::warning(this, "错误", "未找到可用的摄像头！\n请检查摄像头连接和权限设置。");
+//         return;
+//     }
+
+//     try
+//     {
+//         // 停止之前的摄像头
+//         if (m_camera)
+//         {
+//             m_camera->stop();
+//             m_camera->deleteLater();
+//             m_camera = nullptr;
+//         }
+
+//         int selectedIndex = m_cameraComboBox->currentIndex();
+//         if (selectedIndex < 0 || selectedIndex >= m_availableCameras.size())
+//         {
+//             QMessageBox::warning(this, "错误", "无效的摄像头选择！");
+//             return;
+//         }
+
+//         const QCameraDevice& selectedCamera = m_availableCameras.at(selectedIndex);
+//         qDebug() << "Selected camera:" << selectedCamera.description();
+
+//         // 创建摄像头
+//         m_camera = new QCamera(selectedCamera, this);
+
+//         // 连接错误信号
+//         connect(m_camera, &QCamera::errorOccurred, this, &MainWindow::onCameraError);
+
+//         // 连接状态变化信号
+//         connect(m_camera, &QCamera::activeChanged, this,
+//                 [this](bool active)
+//                 {
+//                     qDebug() << "Camera active state changed:" << active;
+//                     if (active)
+//                     {
+//                         m_cameraStatusLabel->setText("摄像头已启动 - 实时识别中...");
+
+//                         // 启动异步图像处理器
+//                         m_imageProcessor->start();
+//                     }
+//                 });
+
+//         // 设置摄像头到捕获会话
+//         m_captureSession->setCamera(m_camera);
+
+//         // 检查摄像头是否可用
+//         if (!m_camera->isAvailable())
+//         {
+//             QMessageBox::warning(this, "错误",
+//                                  "选择的摄像头当前不可用！\n可能正被其他应用程序使用。");
+//             return;
+//         }
+
+//         // 启动摄像头
+//         m_camera->start();
+
+//         // 等待摄像头启动
+//         QTimer::singleShot(
+//             1000, this,
+//             [this]()
+//             {
+//                 if (m_camera && m_camera->isActive())
+//                 {
+//                     m_cameraActive = true;
+//                     m_toggleCameraButton->setText("停止摄像头");
+//                     m_toggleCameraButton->setStyleSheet(
+//                         "QPushButton { font-size: 14px; padding: 10px 20px; background-color: "
+//                         "#dc3545; color: white; border: none; border-radius: 5px; } "
+//                         "QPushButton:hover { background-color: #c82333; }");
+//                     m_captureButton->setEnabled(true);
+//                     m_cameraComboBox->setEnabled(false);
+
+//                     // 启动实时识别定时器 - 降低频率减少CPU占用
+//                     m_recognitionTimer->start();
+
+//                     // 设置处理间隔为1.5秒，避免过于频繁的识别
+//                     m_imageProcessor->setProcessingInterval(1500);
+
+//                     qDebug() << "Camera started successfully";
+//                 }
+//                 else
+//                 {
+//                     QMessageBox::warning(this, "错误",
+//                                          "摄像头启动失败！\n请检查摄像头权限和驱动程序。");
+//                 }
+//             });
+//     }
+//     catch (const std::exception& e)
+//     {
+//         QMessageBox::critical(this, "错误", QString("启动摄像头失败：%1").arg(e.what()));
+//         qDebug() << "Camera start exception:" << e.what();
+//     }
+// }
+
+void MainWindow::stopCamera()
+{
+    // 停止异步处理器
+    if (m_imageProcessor)
+    {
+        m_imageProcessor->stop();
+    }
+
+    if (m_camera)
+    {
+        m_camera->stop();
+        m_camera->deleteLater();
+        m_camera = nullptr;
+    }
+
+    m_recognitionTimer->stop();
+
+    m_cameraActive = false;
+    m_toggleCameraButton->setText("启动摄像头");
+    m_toggleCameraButton->setStyleSheet(
+        "QPushButton { font-size: 14px; padding: 10px 20px; background-color: #28a745; color: "
+        "white; border: none; border-radius: 5px; } QPushButton:hover { background-color: #218838; "
+        "}");
+    m_captureButton->setEnabled(false);
+    m_cameraComboBox->setEnabled(true);
+    m_cameraStatusLabel->setText("摄像头已停止");
+}
+
+void MainWindow::onRecognitionTimerTimeout()
+{
+    // 实时识别（每秒触发一次）
+    if (m_cameraActive && m_imageCapture)
+    {
+        // 避免过于频繁的捕获，检查上次识别时间
+        qint64 currentTime = QDateTime::currentMSecsSinceEpoch();
+        if (currentTime - m_lastRecognitionTime < 1000)
+        { // 1秒内不重复识别
+            return;
+        }
+
+        m_lastRecognitionTime = currentTime;
+        m_imageCapture->capture();
+    }
+}
+
+// void MainWindow::startAsyncRecognition(const QImage& image)
+// {
+//     if (!m_imageProcessor)
+//     {
+//         return;
+//     }
+
+//     // 将图像添加到异步处理队列
+//     m_imageProcessor->addImage(image);
+// }
+
+// void MainWindow::onAsyncRecognitionResult(const QString& result, int requestId)
+// {
+//     Q_UNUSED(requestId)
+
+//     // 更新识别计数
+//     m_recognitionCount++;
+
+//     // 只在识别成功时更新UI和执行操作
+//     if (!result.startsWith("未找到") && !result.startsWith("识别错误"))
+//     {
+//         QMutexLocker locker(&m_recognitionMutex);
+
+//         // 检查是否是新的识别结果
+//         if (result != m_lastRecognizedContent)
+//         {
+//             // 更新实时结果显示
+//             m_cameraResultTextEdit->clear();
+//             m_cameraResultTextEdit->setStyleSheet(
+//                 "QTextEdit { color: #28a745; font-weight: bold; }");
+//             m_cameraResultTextEdit->setPlainText(QString("实时识别成功！\n内容：%1").arg(result));
+
+//             // 添加到历史记录
+//             addToHistory(result);
+
+//             // 处理自动操作
+//             handleAutoActions(result);
+
+//             // 显示识别提示
+//             showRecognitionHint(result);
+
+//             qDebug() << "Async recognition successful:" << result.left(50)
+//                      << "requestId:" << requestId << "count:" << m_recognitionCount;
+//         }
+//     }
+
+//     // 每100次识别输出一次性能统计
+//     if (m_recognitionCount % 100 == 0)
+//     {
+//         qDebug() << "Recognition performance: processed" << m_recognitionCount << "images";
+//     }
+// }

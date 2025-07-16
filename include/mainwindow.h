@@ -20,6 +20,10 @@
 #include <QClipboard>
 #include <QDesktopServices>
 #include <QUrl>
+#include <QThread>
+#include <QMutex>
+#include <QQueue>
+#include <QWaitCondition>
 
 // Qt Multimedia includes
 #include <QCamera>
@@ -43,6 +47,72 @@
     #include "CharacterSet.h"
     #define USE_EXPERIMENTAL_API 0
 #endif
+
+// 新增：识别工作线程类
+class QRRecognitionWorker : public QObject
+{
+    Q_OBJECT
+
+public:
+    explicit QRRecognitionWorker(QObject* parent = nullptr);
+    ~QRRecognitionWorker();
+
+public slots:
+    void processImage(const QImage& image, int requestId);
+    void stop();
+
+signals:
+    void recognitionCompleted(const QString& result, int requestId);
+    void recognitionFailed(const QString& error, int requestId);
+
+private:
+    QString recognizeQRCodeFromImage(const QImage& image);
+    bool m_shouldStop;
+    QMutex m_mutex;
+};
+
+// 新增：图像队列管理器
+class ImageProcessor : public QObject
+{
+    Q_OBJECT
+
+public:
+    explicit ImageProcessor(QObject* parent = nullptr);
+    ~ImageProcessor();
+
+    void addImage(const QImage& image);
+    void start();
+    void stop();
+    void setProcessingInterval(int ms);
+
+signals:
+    void imageReady(const QImage& image, int requestId);
+    void recognitionResult(const QString& result, int requestId);
+
+public slots:
+    void onRecognitionCompleted(const QString& result, int requestId);
+    void onRecognitionFailed(const QString& error, int requestId);
+
+private slots:
+    void processNextImage();
+
+private:
+    struct ImageRequest {
+        QImage image;
+        int requestId;
+        qint64 timestamp;
+    };
+
+    QQueue<ImageRequest> m_imageQueue;
+    QTimer* m_processTimer;
+    QThread* m_workerThread;
+    QRRecognitionWorker* m_worker;
+    QMutex m_queueMutex;
+    int m_currentRequestId;
+    int m_lastProcessedRequestId;
+    static const int MAX_QUEUE_SIZE = 3;  // 限制队列大小避免内存堆积
+    static const int PROCESSING_INTERVAL = 1000;  // 默认1秒处理一次
+};
 
 class MainWindow : public QMainWindow
 {
@@ -79,6 +149,9 @@ class MainWindow : public QMainWindow
     void onAutoOpenUrlChanged(bool enabled);  // 新增：自动跳转网址选项变化
     void onAutoCopyChanged(bool enabled);     // 新增：自动复制选项变化
     
+    // 新增：异步识别结果处理
+    void onAsyncRecognitionResult(const QString& result, int requestId);
+    
     // 通用
     void onModeChanged(int index);
 
@@ -91,7 +164,7 @@ class MainWindow : public QMainWindow
     void startCamera();
     void stopCamera();
     void updateCameraList();
-   
+    int index_ =0 ;
     // 生成相关
     QLabel* m_qrCodeLabel;//新增：保存槽函数
     QPushButton* m_saveQRCodeButton; // 新增：保存二维码按钮
@@ -104,15 +177,15 @@ class MainWindow : public QMainWindow
     QPixmap generateMinimalQRCode(const QString& text);  // 最简化生成方法
     QPixmap createErrorQRCode();  // 创建错误提示图像
     
-    // 识别相关
+    // 识别相关 - 修改为同步版本（用于单张图片识别）
     QString recognizeQRCodeFromImage(const QImage& image);
     QString recognizeQRCodeFromPixmap(const QPixmap& pixmap);
     void displayRecognitionResult(const QString& result);
     void displaySelectedImage(const QPixmap& pixmap);
     void updateRecognizeActionButtons(const QString& result);  // 新增：更新操作按钮状态
     
-    // 摄像头相关
-    void recognizeFromVideoFrame();
+    // 摄像头相关 - 修改为异步处理
+    void startAsyncRecognition(const QImage& image);  // 新增：启动异步识别
     void checkCameraPermissions();
     void debugCameraInfo();
     void addToHistory(const QString& result);  // 新增：添加到历史记录
@@ -122,7 +195,7 @@ class MainWindow : public QMainWindow
     bool isValidUrl(const QString& text);  // 新增：判断是否为有效网址
     void autoOpenUrl(const QString& url);  // 新增：自动打开网址
     void autoCopyToClipboard(const QString& text);  // 新增：自动复制到剪贴板
-
+    void recognizeFromVideoFrame();
     // UI组件 - 主界面
     QWidget* m_centralWidget;
     QTabWidget* m_tabWidget;
@@ -203,4 +276,13 @@ class MainWindow : public QMainWindow
     // 新增：自动功能相关
     bool m_autoOpenUrlEnabled;
     bool m_autoCopyEnabled;
+    
+    // 新增：多线程相关成员
+    ImageProcessor* m_imageProcessor;
+    int m_lastCaptureRequestId;  // 跟踪最后的拍照请求ID
+    QMutex m_recognitionMutex;   // 保护识别结果的互斥锁
+    
+    // 新增：性能监控
+    qint64 m_lastRecognitionTime;  // 上次识别时间
+    int m_recognitionCount;        // 识别计数
 };
