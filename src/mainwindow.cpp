@@ -1337,10 +1337,28 @@ void MainWindow::onSelectImageFile()
             return;
         }
 
-        displaySelectedImage(pixmap);
-        QString result = recognizeQRCodeFromPixmap(pixmap);
-        displayRecognitionResult(result);
-        updateRecognizeActionButtons(result);
+        // 存储原始图像
+        m_originalImagePixmap = pixmap;
+        
+        // 使用新的检测函数获取位置信息
+        m_currentDetectionResult = detectQRCodeFromImage(pixmap.toImage());
+        
+        if (m_currentDetectionResult.isValid)
+        {
+            // 绘制轮廓并显示
+            QPixmap pixmapWithContour = drawQRCodeContour(pixmap, m_currentDetectionResult.position);
+            displaySelectedImage(pixmapWithContour);
+            displayRecognitionResult(m_currentDetectionResult.text);
+            updateRecognizeActionButtons(m_currentDetectionResult.text);
+        }
+        else
+        {
+            // 如果检测失败，显示原图并尝试传统识别
+            displaySelectedImage(pixmap);
+            QString result = recognizeQRCodeFromPixmap(pixmap);
+            displayRecognitionResult(result);
+            updateRecognizeActionButtons(result);
+        }
     }
 }
 
@@ -1416,10 +1434,29 @@ void MainWindow::onNetworkReplyFinished()
     }
 
     m_statusLabel->setText("加载完成");
-    displaySelectedImage(pixmap);
-    QString result = recognizeQRCodeFromPixmap(pixmap);
-    displayRecognitionResult(result);
-    updateRecognizeActionButtons(result);
+    
+    // 存储原始图像
+    m_originalImagePixmap = pixmap;
+    
+    // 使用新的检测函数获取位置信息
+    m_currentDetectionResult = detectQRCodeFromImage(pixmap.toImage());
+    
+    if (m_currentDetectionResult.isValid)
+    {
+        // 绘制轮廓并显示
+        QPixmap pixmapWithContour = drawQRCodeContour(pixmap, m_currentDetectionResult.position);
+        displaySelectedImage(pixmapWithContour);
+        displayRecognitionResult(m_currentDetectionResult.text);
+        updateRecognizeActionButtons(m_currentDetectionResult.text);
+    }
+    else
+    {
+        // 如果检测失败，显示原图并尝试传统识别
+        displaySelectedImage(pixmap);
+        QString result = recognizeQRCodeFromPixmap(pixmap);
+        displayRecognitionResult(result);
+        updateRecognizeActionButtons(result);
+    }
 
     m_currentReply->deleteLater();
     m_currentReply = nullptr;
@@ -1597,6 +1634,233 @@ QString MainWindow::recognizeQRCodeFromImage(const QImage& image)
         qDebug() << "Recognition error:" << e.what();
         return QString("识别错误：%1").arg(e.what());
     }
+}
+
+QRCodeDetectionResult MainWindow::detectQRCodeFromImage(const QImage& image)
+{
+    try
+    {
+        // 转换为ZXing可以处理的格式
+        QImage rgbImage = image.convertToFormat(QImage::Format_RGB888);
+
+        ZXing::ImageView imageView(rgbImage.bits(), rgbImage.width(), rgbImage.height(),
+                                   ZXing::ImageFormat::RGB, rgbImage.bytesPerLine());
+
+        // 定义常用的条码格式列表，按使用频率排序
+        std::vector<ZXing::BarcodeFormat> formatList = {
+            ZXing::BarcodeFormat::QRCode,      // 最常用的二维码
+            ZXing::BarcodeFormat::Code128,     // 常用一维码
+            ZXing::BarcodeFormat::Code39,      // 常用一维码
+            ZXing::BarcodeFormat::EAN13,       // 商品条码
+            ZXing::BarcodeFormat::DataMatrix,  // 数据矩阵
+            ZXing::BarcodeFormat::Aztec,       // 阿兹特克码
+            ZXing::BarcodeFormat::PDF417,      // PDF417
+            ZXing::BarcodeFormat::Code93,      // Code93
+            ZXing::BarcodeFormat::EAN8,        // EAN8
+            ZXing::BarcodeFormat::UPCA,        // UPC-A
+            ZXing::BarcodeFormat::UPCE,        // UPC-E
+            ZXing::BarcodeFormat::ITF,         // ITF
+            ZXing::BarcodeFormat::Codabar,     // Codabar
+            ZXing::BarcodeFormat::MicroQRCode, // 微型QR码
+            ZXing::BarcodeFormat::MaxiCode,    // MaxiCode
+        };
+
+        // 定义不同的识别配置，从宽松到严格
+        std::vector<std::function<void(ZXing::ReaderOptions&)>> configList = {
+            // 配置1：快速识别，只尝试常用格式
+            [](ZXing::ReaderOptions& opts)
+            {
+                opts.setFormats(ZXing::BarcodeFormat::QRCode | ZXing::BarcodeFormat::Code128 |
+                                ZXing::BarcodeFormat::Code39);
+                opts.setTryHarder(false);
+                opts.setTryRotate(false);
+                opts.setTryInvert(false);
+            },
+
+            // 配置2：标准识别，更多格式
+            [](ZXing::ReaderOptions& opts)
+            {
+                opts.setFormats(ZXing::BarcodeFormat::QRCode | ZXing::BarcodeFormat::Code128 |
+                                ZXing::BarcodeFormat::Code39 | ZXing::BarcodeFormat::EAN13 |
+                                ZXing::BarcodeFormat::DataMatrix | ZXing::BarcodeFormat::Aztec);
+                opts.setTryHarder(true);
+                opts.setTryRotate(false);
+                opts.setTryInvert(false);
+            },
+
+            // 配置3：深度识别，启用旋转
+            [](ZXing::ReaderOptions& opts)
+            {
+                opts.setFormats(ZXing::BarcodeFormat::Any);
+                opts.setTryHarder(true);
+                opts.setTryRotate(true);
+                opts.setTryInvert(false);
+            },
+
+            // 配置4：最大努力识别，启用所有选项
+            [](ZXing::ReaderOptions& opts)
+            {
+                opts.setFormats(ZXing::BarcodeFormat::Any);
+                opts.setTryHarder(true);
+                opts.setTryRotate(true);
+                opts.setTryInvert(true);
+                opts.setTryDownscale(true);
+            }};
+
+        // 按配置依次尝试识别
+        for (size_t configIndex = 0; configIndex < configList.size(); ++configIndex)
+        {
+            ZXing::ReaderOptions options;
+            configList[configIndex](options);
+
+            qDebug() << "Trying recognition with config" << configIndex;
+
+            auto result = ZXing::ReadBarcode(imageView, options);
+
+            if (result.isValid())
+            {
+                QString recognizedText = QString::fromStdString(result.text());
+                QString formatName = QString::fromStdString(ToString(result.format()));
+
+                qDebug() << "Successfully recognized with config" << configIndex
+                         << "Format:" << formatName << "Text length:" << recognizedText.length();
+
+                // 返回包含位置信息的结果
+                return QRCodeDetectionResult(recognizedText, result.position(), formatName);
+            }
+        }
+
+        // 如果所有配置都失败，尝试单独测试每种格式
+        qDebug() << "Standard recognition failed, trying individual formats...";
+
+        for (const auto& format : formatList)
+        {
+            ZXing::ReaderOptions options;
+            options.setFormats(format);
+            options.setTryHarder(true);
+            options.setTryRotate(true);
+            options.setTryInvert(true);
+
+            auto result = ZXing::ReadBarcode(imageView, options);
+
+            if (result.isValid())
+            {
+                QString recognizedText = QString::fromStdString(result.text());
+                QString formatName = QString::fromStdString(ToString(result.format()));
+
+                qDebug() << "Successfully recognized with individual format test"
+                         << "Format:" << formatName << "Text length:" << recognizedText.length();
+
+                return QRCodeDetectionResult(recognizedText, result.position(), formatName);
+            }
+        }
+
+        // 最后尝试：降低图像质量后重试
+        qDebug() << "Trying with image preprocessing...";
+
+        // 尝试灰度化和对比度增强
+        QImage grayImage = rgbImage.convertToFormat(QImage::Format_Grayscale8);
+        ZXing::ImageView grayImageView(grayImage.bits(), grayImage.width(), grayImage.height(),
+                                       ZXing::ImageFormat::Lum, grayImage.bytesPerLine());
+
+        ZXing::ReaderOptions finalOptions;
+        finalOptions.setFormats(ZXing::BarcodeFormat::Any);
+        finalOptions.setTryHarder(true);
+        finalOptions.setTryRotate(true);
+        finalOptions.setTryInvert(true);
+        finalOptions.setTryDownscale(true);
+
+        auto finalResult = ZXing::ReadBarcode(grayImageView, finalOptions);
+
+        if (finalResult.isValid())
+        {
+            QString recognizedText = QString::fromStdString(finalResult.text());
+            QString formatName = QString::fromStdString(ToString(finalResult.format()));
+
+            qDebug() << "Successfully recognized with grayscale preprocessing"
+                     << "Format:" << formatName << "Text length:" << recognizedText.length();
+
+            return QRCodeDetectionResult(recognizedText, finalResult.position(), formatName);
+        }
+
+        return QRCodeDetectionResult(); // 返回无效结果
+    }
+    catch (const std::exception& e)
+    {
+        qDebug() << "Detection error:" << e.what();
+        return QRCodeDetectionResult();
+    }
+}
+
+QPixmap MainWindow::drawQRCodeContour(const QPixmap& originalPixmap, const ZXing::QuadrilateralI& position)
+{
+    if (originalPixmap.isNull())
+        return originalPixmap;
+
+    QPixmap result = originalPixmap.copy();
+    QPainter painter(&result);
+    
+    // 设置绘制参数
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    
+    // 设置轮廓样式
+    QPen contourPen;
+    contourPen.setColor(Qt::red);           // 红色轮廓
+    contourPen.setWidth(3);                 // 线条宽度
+    contourPen.setStyle(Qt::SolidLine);     // 实线
+    painter.setPen(contourPen);
+    
+    // 获取四个角点（从整数转换为浮点数用于绘制）
+    QPointF topLeft(static_cast<qreal>(position.topLeft().x), static_cast<qreal>(position.topLeft().y));
+    QPointF topRight(static_cast<qreal>(position.topRight().x), static_cast<qreal>(position.topRight().y));
+    QPointF bottomRight(static_cast<qreal>(position.bottomRight().x), static_cast<qreal>(position.bottomRight().y));
+    QPointF bottomLeft(static_cast<qreal>(position.bottomLeft().x), static_cast<qreal>(position.bottomLeft().y));
+    
+    qDebug() << "Drawing contour at points:" 
+             << topLeft << topRight << bottomRight << bottomLeft;
+    
+    // 绘制四边形轮廓
+    QPolygonF polygon;
+    polygon << topLeft << topRight << bottomRight << bottomLeft;
+    painter.drawPolygon(polygon);
+    
+    // 在四个角点绘制小圆点以突出显示
+    painter.setBrush(Qt::red);
+    const int pointRadius = 5;
+    painter.drawEllipse(topLeft, pointRadius, pointRadius);
+    painter.drawEllipse(topRight, pointRadius, pointRadius);
+    painter.drawEllipse(bottomRight, pointRadius, pointRadius);
+    painter.drawEllipse(bottomLeft, pointRadius, pointRadius);
+    
+    // 添加文本标签显示格式信息（可选）
+    QString formatText = QString("检测到: %1").arg(m_currentDetectionResult.format);
+    QFont font = painter.font();
+    font.setPointSize(12);
+    font.setBold(true);
+    painter.setFont(font);
+    
+    // 计算文本位置（在二维码上方）
+    QPointF textPos = topLeft + QPointF(0, -10);
+    if (textPos.y() < 20) {
+        textPos.setY(bottomLeft.y() + 25); // 如果上方空间不够，放在下方
+    }
+    
+    // 绘制文本背景
+    QFontMetrics fm(font);
+    QRect textRect = fm.boundingRect(formatText);
+    textRect.moveTo(textPos.toPoint());
+    textRect.adjust(-5, -2, 5, 2);
+    
+    painter.setBrush(QColor(255, 255, 255, 200)); // 半透明白色背景
+    painter.setPen(Qt::NoPen);
+    painter.drawRoundedRect(textRect, 3, 3);
+    
+    // 绘制文本
+    painter.setPen(Qt::blue);
+    painter.drawText(textPos, formatText);
+    
+    painter.end();
+    return result;
 }
 
 void MainWindow::displayRecognitionResult(const QString& result)
@@ -2184,9 +2448,6 @@ void MainWindow::onImageCaptured(int id, const QImage& image)
     {
         return;
     }
-
-    // 检查是否为手动拍照
-    bool isManualCapture = (m_lastCaptureRequestId != id);
 
     if (index_ != 2)
     {

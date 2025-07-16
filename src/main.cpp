@@ -1,7 +1,7 @@
 #include <QApplication>
 #include <QTextCodec>
 #include "mainwindow.h"
-
+// TODO 绘制边框
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);   

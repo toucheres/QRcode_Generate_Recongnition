@@ -37,6 +37,7 @@
 #include "BitMatrix.h"
 #include "ReadBarcode.h"
 #include "ImageView.h"
+#include "Quadrilateral.h"
 
 // 检查实验性API是否可用
 #ifdef ZXING_EXPERIMENTAL_API
@@ -47,6 +48,18 @@
     #include "CharacterSet.h"
     #define USE_EXPERIMENTAL_API 0
 #endif
+
+// 新增：二维码识别结果结构
+struct QRCodeDetectionResult {
+    QString text;                    // 识别到的文本
+    bool isValid;                   // 是否识别成功
+    ZXing::QuadrilateralI position; // 二维码的四个角点位置（使用整数类型）
+    QString format;                 // 条码格式
+    
+    QRCodeDetectionResult() : isValid(false) {}
+    QRCodeDetectionResult(const QString& t, const ZXing::QuadrilateralI& pos, const QString& fmt) 
+        : text(t), isValid(true), position(pos), format(fmt) {}
+};
 
 // 新增：识别工作线程类
 class QRRecognitionWorker : public QObject
@@ -179,9 +192,11 @@ class MainWindow : public QMainWindow
     
     // 识别相关 - 修改为同步版本（用于单张图片识别）
     QString recognizeQRCodeFromImage(const QImage& image);
+    QRCodeDetectionResult detectQRCodeFromImage(const QImage& image);  // 新增：返回位置信息的识别函数
     QString recognizeQRCodeFromPixmap(const QPixmap& pixmap);
     void displayRecognitionResult(const QString& result);
     void displaySelectedImage(const QPixmap& pixmap);
+    QPixmap drawQRCodeContour(const QPixmap& originalPixmap, const ZXing::QuadrilateralI& position);  // 新增：绘制轮廓函数
     void updateRecognizeActionButtons(const QString& result);  // 新增：更新操作按钮状态
     
     // 摄像头相关 - 修改为异步处理
@@ -271,6 +286,8 @@ class MainWindow : public QMainWindow
     // 新增：历史记录相关
     QStringList m_recognitionHistory;
     QString m_lastRecognizedContent;
+    QRCodeDetectionResult m_currentDetectionResult;  // 新增：存储当前检测结果
+    QPixmap m_originalImagePixmap;  // 新增：存储原始图像，用于重新绘制轮廓
     QTimer* m_hintTimer;  // 用于控制提示显示时间
     
     // 新增：自动功能相关
