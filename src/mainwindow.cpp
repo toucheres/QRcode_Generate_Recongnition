@@ -195,6 +195,7 @@ void MainWindow::setupGenerateMode()
     QHBoxLayout* sizeLayout = new QHBoxLayout();
     QLabel* sizeLabel = new QLabel("二维码大小:");
     m_qrSizeSpinBox = new QSpinBox();
+    m_qrSizeSpinBox->setFixedSize(150,25);
     m_qrSizeSpinBox->setRange(100, 800);
     m_qrSizeSpinBox->setValue(300);
     m_qrSizeSpinBox->setSuffix(" px");
