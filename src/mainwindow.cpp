@@ -344,7 +344,13 @@ void MainWindow::setupGenerateMode()
         "QPushButton { font-size: 14px; padding: 10px 20px; background-color: #007ACC; color: "
         "white; border: none; border-radius: 5px; } QPushButton:hover { background-color: #005a9e; "
         "}");
-
+    
+    //保存按钮
+    m_saveQRCodeButton = new QPushButton("保存二维码", m_generateWidget);
+    m_saveQRCodeButton->setStyleSheet(
+        "QPushButton { font-size: 14px; padding: 10px 20px; background-color: #007ACC; color: "
+        "white; border: none; border-radius: 5px; } QPushButton:hover { background-color: #005a9e; "
+        "}");
     // 二维码显示区域
     m_qrCodeLabel = new QLabel(m_generateWidget);
     m_qrCodeLabel->setAlignment(Qt::AlignCenter);
