@@ -219,9 +219,9 @@ void MainWindow::setupGenerateMode()
     m_generateTitleLabel->setStyleSheet(
         "QLabel { font-size: 24px; font-weight: bold; color: #333; margin: 20px; }");
     // 按钮
-    m_generateButton = new QPushButton("生成二维码", m_generateWidget);
-    m_saveQRCodeButton = new QPushButton("保存二维码", m_generateWidget);
-    m_saveQRCodeButton->setEnabled(false);
+    // m_generateButton = new QPushButton("生成二维码", m_generateWidget);
+    // m_saveQRCodeButton = new QPushButton("保存二维码", m_generateWidget);
+    // m_saveQRCodeButton->setEnabled(false);
     // 输入框
     m_textInput = new QLineEdit(m_generateWidget);
     m_textInput->setPlaceholderText("请输入要生成二维码的文本（支持中文）...");
@@ -368,7 +368,6 @@ void MainWindow::setupGenerateMode()
     connect(m_embedLogoCheckBox, &QCheckBox::toggled, this, &MainWindow::onEmbedLogoChanged);
     connect(m_selectLogoButton, &QPushButton::clicked, this, &MainWindow::onSelectLogoImage);
     connect(m_logoSizeSlider, &QSlider::valueChanged, this, &MainWindow::onLogoSizeChanged);
-    connect(m_generateButton, &QPushButton::clicked, this, &MainWindow::onGenerateQRCode);
     connect(m_saveQRCodeButton, &QPushButton::clicked, this, &MainWindow::onSaveQRCode);
     // 布局
     // layout->addWidget(m_qrformat);
