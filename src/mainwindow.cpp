@@ -46,7 +46,8 @@ MainWindow::MainWindow(QWidget* parent)
       m_toggleCameraButton(nullptr), m_captureButton(nullptr), m_videoWidget(nullptr),
       m_cameraStatusLabel(nullptr), m_cameraResultTextEdit(nullptr), m_networkManager(nullptr),
       m_currentReply(nullptr), m_camera(nullptr), m_imageCapture(nullptr),
-      m_captureSession(nullptr), m_recognitionTimer(nullptr), m_cameraActive(false)
+      m_captureSession(nullptr), m_recognitionTimer(nullptr), m_cameraActive(false),
+      m_qrformat(nullptr)
 {
     qDebug() << "MainWindow constructor started";
 
@@ -147,6 +148,41 @@ void MainWindow::setupGenerateMode()
     errorCorrectionLayout->addWidget(ecLabel);
     errorCorrectionLayout->addWidget(m_errorCorrectionCombo);
     errorCorrectionLayout->addStretch();
+    // 格式选择
+    QHBoxLayout* qrformatlayout = new QHBoxLayout();
+
+    m_qrformat = new QComboBox(m_generateWidget);
+
+    // 添加带说明的格式选项
+    m_qrformat->addItem("QR Code - 二维码", "QRCode");
+    m_qrformat->addItem("Code 128 - 一维条码", "Code128");
+    m_qrformat->addItem("Code 39 - 一维条码", "Code39");
+    m_qrformat->addItem("Code 93 - 一维条码", "Code93");
+    m_qrformat->addItem("EAN-13 - 商品条码", "EAN13");
+    m_qrformat->addItem("EAN-8 - 短商品条码", "EAN8");
+    m_qrformat->addItem("UPC-A - 美国商品码", "UPCA");
+    m_qrformat->addItem("UPC-E - 短美国商品码", "UPCE");
+    m_qrformat->addItem("Codabar - 图书馆码", "Codabar");
+    m_qrformat->addItem("ITF - 交叉二五码", "ITF");
+    m_qrformat->addItem("Data Matrix - 数据矩阵", "DataMatrix");
+    m_qrformat->addItem("Aztec - 阿兹特克码", "Aztec");
+    m_qrformat->addItem("PDF417 - 便携数据文件", "PDF417");
+    m_qrformat->addItem("MaxiCode - 最大码", "MaxiCode");
+    m_qrformat->addItem("Micro QR - 微型二维码", "MicroQRCode");
+    m_qrformat->addItem("RM QR - 矩形微型二维码", "RMQRCode");
+    m_qrformat->addItem("GS1 DataBar - 数据条", "DataBar");
+    m_qrformat->addItem("GS1 DataBar Expanded - 扩展数据条", "DataBarExpanded");
+    m_qrformat->addItem("GS1 DataBar Limited - 受限数据条", "DataBarLimited");
+    m_qrformat->addItem("DX Film Edge - 胶片边缘码", "DXFilmEdge");
+
+    m_qrformat->setCurrentIndex(0); // 默认选择QRCode
+
+    // 添加工具提示
+    m_qrformat->setToolTip("选择要生成的条码/二维码格式");
+
+    qrformatlayout->addWidget(new QLabel("格式选择"));
+    qrformatlayout->addWidget(m_qrformat);
+    qrformatlayout->addStretch();
 
     // 二维码大小设置
     QHBoxLayout* sizeLayout = new QHBoxLayout();
@@ -201,6 +237,7 @@ void MainWindow::setupGenerateMode()
     logoSizeLayout->addStretch();
 
     // 添加到选项布局
+    optionsLayout->addLayout(qrformatlayout);
     optionsLayout->addLayout(errorCorrectionLayout);
     optionsLayout->addLayout(sizeLayout);
     optionsLayout->addWidget(m_embedLogoCheckBox);
@@ -229,6 +266,7 @@ void MainWindow::setupGenerateMode()
     connect(m_logoSizeSlider, &QSlider::valueChanged, this, &MainWindow::onLogoSizeChanged);
 
     // 布局
+    // layout->addWidget(m_qrformat);
     layout->addWidget(m_generateTitleLabel);
     layout->addWidget(m_textInput);
     layout->addWidget(m_qrOptionsGroup);
@@ -794,9 +832,10 @@ void MainWindow::onGenerateQRCode()
         QMessageBox::warning(this, "警告", "请输入要生成二维码的文本！");
         return;
     }
-    
+
     // 检查文本长度，避免过长文本
-    if (text.length() > 1000) {
+    if (text.length() > 1000)
+    {
         QMessageBox::warning(this, "警告", "输入文本过长，请控制在1000个字符以内！");
         return;
     }
@@ -821,86 +860,112 @@ void MainWindow::onGenerateQRCode()
     // 尝试多级回退生成
     QPixmap qrPixmap;
     QString errorMsg;
-    
+
     // 第一次尝试：使用用户设置的参数
-    try {
+    try
+    {
         qDebug() << "Attempting primary generation method...";
         qrPixmap = generateQRCodePixmap(text);
-        if (!qrPixmap.isNull()) {
+        if (!qrPixmap.isNull())
+        {
             qDebug() << "Primary generation successful";
         }
-    } catch (const std::exception& e) {
+    }
+    catch (const std::exception& e)
+    {
         errorMsg = QString("主要方法失败: %1").arg(e.what());
         qDebug() << errorMsg;
     }
-    
+
     // 第二次尝试：使用备用方法
-    if (qrPixmap.isNull()) {
+    if (qrPixmap.isNull())
+    {
         qDebug() << "Primary method failed, trying fallback...";
-        try {
+        try
+        {
             QString ecLevel = m_errorCorrectionCombo->currentData().toString();
             int qrSize = m_qrSizeSpinBox->value();
             qrPixmap = generateQRCodeWithFallback(text, ecLevel, qrSize);
-            if (!qrPixmap.isNull()) {
+            if (!qrPixmap.isNull())
+            {
                 qDebug() << "Fallback generation successful";
             }
-        } catch (const std::exception& e) {
+        }
+        catch (const std::exception& e)
+        {
             errorMsg += QString("\n备用方法失败: %1").arg(e.what());
             qDebug() << "Fallback failed:" << e.what();
         }
     }
-    
+
     // 第三次尝试：使用最简化方法
-    if (qrPixmap.isNull()) {
+    if (qrPixmap.isNull())
+    {
         qDebug() << "Fallback failed, trying minimal method...";
-        try {
+        try
+        {
             qrPixmap = generateMinimalQRCode(text);
-            if (!qrPixmap.isNull()) {
+            if (!qrPixmap.isNull())
+            {
                 qDebug() << "Minimal generation successful";
-                QMessageBox::information(this, "提示", "使用简化参数生成二维码成功。\n如需自定义参数，请检查输入内容。");
+                QMessageBox::information(
+                    this, "提示", "使用简化参数生成二维码成功。\n如需自定义参数，请检查输入内容。");
             }
-        } catch (const std::exception& e) {
+        }
+        catch (const std::exception& e)
+        {
             errorMsg += QString("\n最简方法失败: %1").arg(e.what());
             qDebug() << "Minimal method failed:" << e.what();
         }
     }
-    
+
     // 如果所有方法都失败，显示错误图像
-    if (qrPixmap.isNull()) {
+    if (qrPixmap.isNull())
+    {
         qDebug() << "All generation methods failed, showing error image";
         qrPixmap = createErrorQRCode();
-        QMessageBox::critical(this, "错误", QString("二维码生成失败！\n\n错误详情：\n%1\n\n建议：\n1. 简化输入文本\n2. 检查文本编码\n3. 重启应用程序").arg(errorMsg));
+        QMessageBox::critical(this, "错误",
+                              QString("二维码生成失败！\n\n错误详情：\n%1\n\n建议：\n1. "
+                                      "简化输入文本\n2. 检查文本编码\n3. 重启应用程序")
+                                  .arg(errorMsg));
     }
-    
+
     // 应用Logo嵌入（如果成功生成了二维码且不是错误图像）
-    if (!qrPixmap.isNull() && m_embedLogoCheckBox->isChecked() && !m_logoPixmap.isNull()) {
-        try {
+    if (!qrPixmap.isNull() && m_embedLogoCheckBox->isChecked() && !m_logoPixmap.isNull())
+    {
+        try
+        {
             qrPixmap = embedLogoInQRCode(qrPixmap, m_logoPixmap, m_logoSizeSlider->value());
-        } catch (const std::exception& e) {
+        }
+        catch (const std::exception& e)
+        {
             qDebug() << "Logo embedding failed:" << e.what();
             QMessageBox::warning(this, "警告", "Logo嵌入失败，显示无Logo版本。");
         }
     }
-    
+
     // 显示结果
-    if (!qrPixmap.isNull()) {
+    if (!qrPixmap.isNull())
+    {
         m_qrCodeLabel->setPixmap(qrPixmap);
         m_qrCodeLabel->setText("");
-        
+
         // 只有在非错误图像时才显示成功信息
-        if (qrPixmap.width() > 200 || qrPixmap.height() > 200) {
+        if (qrPixmap.width() > 200 || qrPixmap.height() > 200)
+        {
             QString info = QString("二维码生成成功！\n文本：%1\n长度：%2 字符")
-                          .arg(text.length() > 50 ? text.left(50) + "..." : text)
-                          .arg(text.length());
-            
-            if (m_embedLogoCheckBox->isChecked() && !m_logoPixmap.isNull()) {
+                               .arg(text.length() > 50 ? text.left(50) + "..." : text)
+                               .arg(text.length());
+
+            if (m_embedLogoCheckBox->isChecked() && !m_logoPixmap.isNull())
+            {
                 info += QString("\nLogo大小：%1%").arg(m_logoSizeSlider->value());
             }
-            
+
             QMessageBox::information(this, "成功", info);
         }
     }
-    
+
     qDebug() << "=== QR Code Generation Completed ===";
 }
 
@@ -924,38 +989,75 @@ QPixmap MainWindow::generateQRCodePixmap(const QString& text)
 #ifdef ZXING_EXPERIMENTAL_API
         // 使用实验性API
         qDebug() << "Using experimental API path";
-        
-        try {
+
+        try
+        {
             qDebug() << "Creating CreatorOptions with QRCode format...";
-            ZXing::CreatorOptions options(ZXing::BarcodeFormat::QRCode);
+            // ZXing::CreatorOptions options(ZXing::BarcodeFormat::QRCode);
+            ZXing::CreatorOptions options(
+                [this]()
+                {
+                    QMap<QString, ZXing::BarcodeFormat> trans{
+                        {"QRCode", ZXing::BarcodeFormat::QRCode},
+                        {"Code128", ZXing::BarcodeFormat::Code128},
+                        {"Code39", ZXing::BarcodeFormat::Code39},
+                        {"Code93", ZXing::BarcodeFormat::Code93},
+                        {"EAN13", ZXing::BarcodeFormat::EAN13},
+                        {"EAN8", ZXing::BarcodeFormat::EAN8},
+                        {"UPCA", ZXing::BarcodeFormat::UPCA},
+                        {"UPCE", ZXing::BarcodeFormat::UPCE},
+                        {"Codabar", ZXing::BarcodeFormat::Codabar},
+                        {"ITF", ZXing::BarcodeFormat::ITF},
+                        {"DataMatrix", ZXing::BarcodeFormat::DataMatrix},
+                        {"Aztec", ZXing::BarcodeFormat::Aztec},
+                        {"PDF417", ZXing::BarcodeFormat::PDF417},
+                        {"MaxiCode", ZXing::BarcodeFormat::MaxiCode},
+                        {"MicroQRCode", ZXing::BarcodeFormat::MicroQRCode},
+                        {"RMQRCode", ZXing::BarcodeFormat::RMQRCode},
+                        {"DataBar", ZXing::BarcodeFormat::DataBar},
+                        {"DataBarExpanded", ZXing::BarcodeFormat::DataBarExpanded},
+                        {"DataBarLimited", ZXing::BarcodeFormat::DataBarLimited},
+                        {"DXFilmEdge", ZXing::BarcodeFormat::DXFilmEdge}};
+                    return trans[QString{this->m_qrformat->currentData().toString()}];
+                }());
             qDebug() << "CreatorOptions created successfully";
-            
+
             // 修复：将字母转换为数字字符串
             std::string ecLevelStd;
-            if (ecLevel == "L") {
+            if (ecLevel == "L")
+            {
                 ecLevelStd = "0";
-            } else if (ecLevel == "M") {
+            }
+            else if (ecLevel == "M")
+            {
                 ecLevelStd = "1";
-            } else if (ecLevel == "Q") {
+            }
+            else if (ecLevel == "Q")
+            {
                 ecLevelStd = "2";
-            } else if (ecLevel == "H") {
+            }
+            else if (ecLevel == "H")
+            {
                 ecLevelStd = "3";
-            } else {
+            }
+            else
+            {
                 ecLevelStd = "1"; // 默认M级别
             }
-            
-            qDebug() << "Converting ecLevel from" << ecLevel << "to numeric string:" << QString::fromStdString(ecLevelStd);
+
+            qDebug() << "Converting ecLevel from" << ecLevel
+                     << "to numeric string:" << QString::fromStdString(ecLevelStd);
             qDebug() << "About to call options.ecLevel()...";
-            
+
             options.ecLevel(ecLevelStd); // 设置错误纠正级别（使用数字字符串）
             qDebug() << "ecLevel set successfully";
-            
+
             qDebug() << "About to create barcode from text...";
             qDebug() << "Text for barcode creation:" << QString::fromStdString(stdText);
-            
+
             auto barcode = ZXing::CreateBarcodeFromText(stdText, options);
             qDebug() << "CreateBarcodeFromText completed";
-            
+
             if (!barcode.isValid())
             {
                 qDebug() << "Failed to create barcode - barcode is not valid";
@@ -963,23 +1065,25 @@ QPixmap MainWindow::generateQRCodePixmap(const QString& text)
                 // 直接跳转到传统API
                 throw std::runtime_error("Experimental API failed, using fallback");
             }
-            
+
             qDebug() << "Barcode created successfully, creating writer options...";
             ZXing::WriterOptions writerOptions;
             writerOptions.sizeHint(qrSize).withQuietZones(true);
             qDebug() << "Writer options configured";
-            
+
             qDebug() << "Writing barcode to image...";
             auto image = ZXing::WriteBarcodeToImage(barcode, writerOptions);
-            qDebug() << "Image created successfully, size:" << image.width() << "x" << image.height();
-            
+            qDebug() << "Image created successfully, size:" << image.width() << "x"
+                     << image.height();
+
             // 将ZXing Image转换为QPixmap
             QImage qImage(image.data(), image.width(), image.height(), QImage::Format_Grayscale8);
             qDebug() << "QImage created, size:" << qImage.width() << "x" << qImage.height();
-            
+
             return QPixmap::fromImage(qImage);
-            
-        } catch (const std::exception& expApiError) {
+        }
+        catch (const std::exception& expApiError)
+        {
             qDebug() << "Experimental API error:" << expApiError.what();
             qDebug() << "Falling back to legacy API...";
             // 继续执行到传统API部分
@@ -1411,28 +1515,34 @@ QPixmap MainWindow::generateQRCodeWithFallback(const QString& text, const QStrin
 QPixmap MainWindow::generateMinimalQRCode(const QString& text)
 {
     qDebug() << "Using minimal QR code generation";
-    
-    try {
+
+    try
+    {
         // 创建最基本的writer，不设置任何可选参数
         ZXing::MultiFormatWriter writer(ZXing::BarcodeFormat::QRCode);
-        
+
         // 转换文本为标准字符串
         std::string stdText = text.toStdString();
-        
+
         qDebug() << "Minimal: generating with basic parameters only";
-        
+
         // 使用默认参数生成（不调用任何setter方法）
         auto bitMatrix = writer.encode(stdText, 200, 200);
-        
-        if (bitMatrix.width() > 0 && bitMatrix.height() > 0) {
-            qDebug() << "Minimal generation successful, size:" << bitMatrix.width() << "x" << bitMatrix.height();
+
+        if (bitMatrix.width() > 0 && bitMatrix.height() > 0)
+        {
+            qDebug() << "Minimal generation successful, size:" << bitMatrix.width() << "x"
+                     << bitMatrix.height();
             return zxingMatrixToQPixmap(bitMatrix);
-        } else {
+        }
+        else
+        {
             qDebug() << "Minimal generation failed: invalid matrix dimensions";
             return createErrorQRCode();
         }
-        
-    } catch (const std::exception& e) {
+    }
+    catch (const std::exception& e)
+    {
         qDebug() << "Minimal generation exception:" << e.what();
         return createErrorQRCode();
     }
@@ -1441,21 +1551,21 @@ QPixmap MainWindow::generateMinimalQRCode(const QString& text)
 QPixmap MainWindow::createErrorQRCode()
 {
     qDebug() << "Creating error placeholder QR code";
-    
+
     // 创建一个简单的错误提示图像
     int size = 200;
     QPixmap errorPixmap(size, size);
     errorPixmap.fill(Qt::white);
-    
+
     QPainter painter(&errorPixmap);
     painter.setPen(QPen(Qt::red, 2));
     painter.setFont(QFont("Arial", 12, QFont::Bold));
-    
+
     // 绘制错误信息
     painter.drawText(errorPixmap.rect(), Qt::AlignCenter, "二维码\n生成失败");
-    
+
     // 绘制边框
-    painter.drawRect(0, 0, size-1, size-1);
-    
+    painter.drawRect(0, 0, size - 1, size - 1);
+
     return errorPixmap;
 }

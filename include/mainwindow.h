@@ -124,7 +124,7 @@ class MainWindow : public QMainWindow
     QLabel* m_logoPreviewLabel;
     QSlider* m_logoSizeSlider;
     QLabel* m_logoSizeLabel;
-    
+    QComboBox* m_qrformat;
     // 新增：存储logo图片
     QPixmap m_logoPixmap;
     
