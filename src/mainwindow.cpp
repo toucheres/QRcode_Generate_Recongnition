@@ -3,7 +3,10 @@
 #include "MultiFormatWriter.h"
 #include <QApplication>
 #include <QCameraDevice>
+#include <QClipboard>
+#include <QDateTime>
 #include <QDebug>
+#include <QDesktopServices>
 #include <QFileDialog>
 #include <QGroupBox>
 #include <QHBoxLayout>
@@ -47,7 +50,11 @@ MainWindow::MainWindow(QWidget* parent)
       m_cameraStatusLabel(nullptr), m_cameraResultTextEdit(nullptr), m_networkManager(nullptr),
       m_currentReply(nullptr), m_camera(nullptr), m_imageCapture(nullptr),
       m_captureSession(nullptr), m_recognitionTimer(nullptr), m_cameraActive(false),
-      m_qrformat(nullptr)
+      m_qrformat(nullptr), m_historyGroup(nullptr), m_historyTextEdit(nullptr),
+      m_clearHistoryButton(nullptr), m_recognitionHintLabel(nullptr), m_hintTimer(nullptr),
+      m_autoActionsGroup(nullptr), m_autoOpenUrlCheckBox(nullptr), m_autoCopyCheckBox(nullptr),
+      m_autoOpenUrlEnabled(false), m_autoCopyEnabled(false), m_recognizeActionsGroup(nullptr),
+      m_copyResultButton(nullptr), m_openUrlButton(nullptr)
 {
     qDebug() << "MainWindow constructor started";
 
@@ -334,16 +341,58 @@ void MainWindow::setupRecognizeMode()
     m_imageDisplayLabel->setScaledContents(true);
     imageLayout->addWidget(m_imageDisplayLabel);
 
+    // 右侧区域：结果显示和操作按钮
+    QWidget* rightWidget = new QWidget();
+    QVBoxLayout* rightLayout = new QVBoxLayout(rightWidget);
+
     // 结果显示
     QGroupBox* resultGroup = new QGroupBox("识别结果");
     QVBoxLayout* resultLayout = new QVBoxLayout(resultGroup);
     m_resultTextEdit = new QTextEdit();
     m_resultTextEdit->setPlaceholderText("识别结果将显示在这里...");
     m_resultTextEdit->setStyleSheet("QTextEdit { font-size: 14px; padding: 10px; }");
+    m_resultTextEdit->setReadOnly(true);
     resultLayout->addWidget(m_resultTextEdit);
 
+    // 新增：操作按钮区域
+    m_recognizeActionsGroup = new QGroupBox("操作选项");
+    QVBoxLayout* actionsLayout = new QVBoxLayout(m_recognizeActionsGroup);
+
+    QHBoxLayout* buttonLayout = new QHBoxLayout();
+
+    m_copyResultButton = new QPushButton("复制内容");
+    m_copyResultButton->setStyleSheet(
+        "QPushButton { font-size: 14px; padding: 10px 20px; background-color: #17a2b8; color: "
+        "white; border: none; border-radius: 5px; } QPushButton:hover { background-color: #138496; "
+        "} QPushButton:disabled { background-color: #6c757d; }");
+    m_copyResultButton->setToolTip("将识别结果复制到剪贴板");
+    m_copyResultButton->setEnabled(false);
+
+    m_openUrlButton = new QPushButton("打开网址");
+    m_openUrlButton->setStyleSheet(
+        "QPushButton { font-size: 14px; padding: 10px 20px; background-color: #28a745; color: "
+        "white; border: none; border-radius: 5px; } QPushButton:hover { background-color: #218838; "
+        "} QPushButton:disabled { background-color: #6c757d; }");
+    m_openUrlButton->setToolTip("如果识别结果是网址，在浏览器中打开");
+    m_openUrlButton->setEnabled(false);
+
+    buttonLayout->addWidget(m_copyResultButton);
+    buttonLayout->addWidget(m_openUrlButton);
+    buttonLayout->addStretch();
+
+    actionsLayout->addLayout(buttonLayout);
+
+    // 添加提示文本
+    QLabel* hintLabel = new QLabel("提示：识别成功后可以复制内容或打开网址");
+    hintLabel->setStyleSheet("QLabel { color: #666; font-size: 12px; font-style: italic; }");
+    actionsLayout->addWidget(hintLabel);
+
+    rightLayout->addWidget(resultGroup);
+    rightLayout->addWidget(m_recognizeActionsGroup);
+    rightLayout->addStretch();
+
     splitter->addWidget(imageGroup);
-    splitter->addWidget(resultGroup);
+    splitter->addWidget(rightWidget);
     splitter->setSizes({350, 350});
 
     // 状态标签
@@ -355,6 +404,8 @@ void MainWindow::setupRecognizeMode()
     connect(m_urlInput, &QLineEdit::textChanged, this, &MainWindow::onUrlInputChanged);
     connect(m_loadUrlButton, &QPushButton::clicked, this, &MainWindow::onLoadFromUrl);
     connect(m_urlInput, &QLineEdit::returnPressed, this, &MainWindow::onLoadFromUrl);
+    connect(m_copyResultButton, &QPushButton::clicked, this, &MainWindow::onCopyRecognizedText);
+    connect(m_openUrlButton, &QPushButton::clicked, this, &MainWindow::onOpenRecognizedUrl);
 
     // 布局
     mainLayout->addWidget(m_recognizeTitleLabel);
@@ -418,6 +469,32 @@ void MainWindow::setupCameraRecognition()
     controlLayout->addLayout(cameraSelectLayout);
     controlLayout->addLayout(buttonLayout);
 
+    // 新增：自动功能选项
+    m_autoActionsGroup = new QGroupBox("自动功能");
+    QVBoxLayout* autoLayout = new QVBoxLayout(m_autoActionsGroup);
+
+    m_autoOpenUrlCheckBox = new QCheckBox("识别到网址时自动跳转");
+    m_autoOpenUrlCheckBox->setToolTip("当识别到的内容是有效网址时，自动在浏览器中打开");
+    m_autoOpenUrlCheckBox->setStyleSheet("QCheckBox { font-size: 12px; padding: 3px; }");
+
+    m_autoCopyCheckBox = new QCheckBox("自动复制识别内容到剪贴板");
+    m_autoCopyCheckBox->setToolTip("每次成功识别二维码后，自动将内容复制到系统剪贴板");
+    m_autoCopyCheckBox->setStyleSheet("QCheckBox { font-size: 12px; padding: 3px; }");
+
+    autoLayout->addWidget(m_autoOpenUrlCheckBox);
+    autoLayout->addWidget(m_autoCopyCheckBox);
+
+    controlLayout->addWidget(m_autoActionsGroup);
+
+    // 新增：识别提示标签
+    m_recognitionHintLabel = new QLabel();
+    m_recognitionHintLabel->setAlignment(Qt::AlignCenter);
+    m_recognitionHintLabel->setStyleSheet(
+        "QLabel { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; "
+        "border-radius: 5px; padding: 8px; margin: 5px; }");
+    m_recognitionHintLabel->hide();
+    controlLayout->addWidget(m_recognitionHintLabel);
+
     // 创建水平分割器
     QSplitter* splitter = new QSplitter(Qt::Horizontal);
 
@@ -430,18 +507,49 @@ void MainWindow::setupCameraRecognition()
         "QVideoWidget { border: 2px solid #ccc; background-color: #000; }");
     videoLayout->addWidget(m_videoWidget);
 
-    // 结果显示区域
-    QGroupBox* resultGroup = new QGroupBox("识别结果");
+    // 右侧区域：结果显示和历史记录
+    QWidget* rightWidget = new QWidget();
+    QVBoxLayout* rightLayout = new QVBoxLayout(rightWidget);
+
+    // 实时识别结果显示区域
+    QGroupBox* resultGroup = new QGroupBox("实时识别结果");
     QVBoxLayout* resultLayout = new QVBoxLayout(resultGroup);
     m_cameraResultTextEdit = new QTextEdit();
     m_cameraResultTextEdit->setPlaceholderText(
         "实时识别结果将显示在这里...\n启动摄像头后会自动尝试识别画面中的二维码");
     m_cameraResultTextEdit->setStyleSheet("QTextEdit { font-size: 14px; padding: 10px; }");
+    m_cameraResultTextEdit->setMaximumHeight(150);
     resultLayout->addWidget(m_cameraResultTextEdit);
 
+    // 新增：历史记录区域
+    m_historyGroup = new QGroupBox("识别历史记录");
+    QVBoxLayout* historyLayout = new QVBoxLayout(m_historyGroup);
+
+    QHBoxLayout* historyHeaderLayout = new QHBoxLayout();
+    QLabel* historyLabel = new QLabel("历史记录 (自动去重):");
+    m_clearHistoryButton = new QPushButton("清空记录");
+    m_clearHistoryButton->setStyleSheet(
+        "QPushButton { font-size: 12px; padding: 5px 10px; background-color: #dc3545; color: "
+        "white; border: none; border-radius: 3px; } QPushButton:hover { background-color: #c82333; "
+        "}");
+    historyHeaderLayout->addWidget(historyLabel);
+    historyHeaderLayout->addStretch();
+    historyHeaderLayout->addWidget(m_clearHistoryButton);
+
+    m_historyTextEdit = new QTextEdit();
+    m_historyTextEdit->setPlaceholderText("识别到的二维码内容将按时间顺序显示在这里...");
+    m_historyTextEdit->setStyleSheet("QTextEdit { font-size: 12px; padding: 8px; }");
+    m_historyTextEdit->setReadOnly(true);
+
+    historyLayout->addLayout(historyHeaderLayout);
+    historyLayout->addWidget(m_historyTextEdit);
+
+    rightLayout->addWidget(resultGroup);
+    rightLayout->addWidget(m_historyGroup);
+
     splitter->addWidget(videoGroup);
-    splitter->addWidget(resultGroup);
-    splitter->setSizes({450, 350});
+    splitter->addWidget(rightWidget);
+    splitter->setSizes({450, 400});
 
     // 状态标签
     m_cameraStatusLabel = new QLabel("摄像头未启动");
@@ -452,6 +560,9 @@ void MainWindow::setupCameraRecognition()
     connect(m_captureButton, &QPushButton::clicked, this, &MainWindow::onCaptureImage);
     connect(m_cameraComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             &MainWindow::onCameraChanged);
+    connect(m_clearHistoryButton, &QPushButton::clicked, this, &MainWindow::onClearHistory);
+    connect(m_autoOpenUrlCheckBox, &QCheckBox::toggled, this, &MainWindow::onAutoOpenUrlChanged);
+    connect(m_autoCopyCheckBox, &QCheckBox::toggled, this, &MainWindow::onAutoCopyChanged);
 
     // 布局
     mainLayout->addWidget(titleLabel);
@@ -468,6 +579,12 @@ void MainWindow::initializeCamera()
     m_recognitionTimer = new QTimer(this);
     m_recognitionTimer->setInterval(1000); // 每秒识别一次
     connect(m_recognitionTimer, &QTimer::timeout, this, &MainWindow::onRecognitionTimerTimeout);
+
+    // 新增：初始化提示定时器
+    m_hintTimer = new QTimer(this);
+    m_hintTimer->setSingleShot(true);
+    m_hintTimer->setInterval(3000); // 3秒后隐藏提示
+    connect(m_hintTimer, &QTimer::timeout, this, [this]() { m_recognitionHintLabel->hide(); });
 
     // 创建捕获会话
     m_captureSession = new QMediaCaptureSession(this);
@@ -698,7 +815,7 @@ void MainWindow::onImageCaptured(int id, const QImage& image)
 
     QString result = recognizeQRCodeFromImage(image);
 
-    // 更新结果显示
+    // 更新实时结果显示
     m_cameraResultTextEdit->clear();
     if (result.startsWith("未找到") || result.startsWith("识别错误"))
     {
@@ -710,8 +827,14 @@ void MainWindow::onImageCaptured(int id, const QImage& image)
         m_cameraResultTextEdit->setStyleSheet("QTextEdit { color: #28a745; font-weight: bold; }");
         m_cameraResultTextEdit->setPlainText(QString("拍照识别成功！\n内容：%1").arg(result));
 
-        // 播放成功提示音（可选）
-        QMessageBox::information(this, "识别成功", QString("识别到二维码内容：\n%1").arg(result));
+        // 新增：添加到历史记录
+        addToHistory(result);
+
+        // 新增：处理自动操作
+        handleAutoActions(result);
+
+        // 新增：显示识别提示
+        showRecognitionHint(result);
     }
 }
 
@@ -1241,6 +1364,7 @@ void MainWindow::onSelectImageFile()
         displaySelectedImage(pixmap);
         QString result = recognizeQRCodeFromPixmap(pixmap);
         displayRecognitionResult(result);
+        updateRecognizeActionButtons(result);
     }
 }
 
@@ -1319,6 +1443,7 @@ void MainWindow::onNetworkReplyFinished()
     displaySelectedImage(pixmap);
     QString result = recognizeQRCodeFromPixmap(pixmap);
     displayRecognitionResult(result);
+    updateRecognizeActionButtons(result);
 
     m_currentReply->deleteLater();
     m_currentReply = nullptr;
@@ -1378,6 +1503,9 @@ void MainWindow::displayRecognitionResult(const QString& result)
 {
     m_resultTextEdit->clear();
     m_resultTextEdit->setPlainText(result);
+
+    // 存储当前识别结果
+    m_currentRecognizedText = result;
 
     if (result.startsWith("未找到") || result.startsWith("识别错误"))
     {
@@ -1568,4 +1696,383 @@ QPixmap MainWindow::createErrorQRCode()
     painter.drawRect(0, 0, size - 1, size - 1);
 
     return errorPixmap;
+}
+
+void MainWindow::addToHistory(const QString& result)
+{
+    // 检查是否与上次识别结果相同
+    if (result == m_lastRecognizedContent)
+    {
+        return; // 相同结果不添加到历史记录
+    }
+
+    // 更新最后识别的内容
+    m_lastRecognizedContent = result;
+
+    // 添加到历史记录（带时间戳）
+    QString timestamp = QDateTime::currentDateTime().toString("hh:mm:ss");
+    QString historyEntry = QString("[%1] %2").arg(timestamp).arg(result);
+
+    m_recognitionHistory.append(historyEntry);
+
+    // 限制历史记录数量（保留最近50条）
+    if (m_recognitionHistory.size() > 50)
+    {
+        m_recognitionHistory.removeFirst();
+    }
+
+    // 更新显示
+    updateHistoryDisplay();
+}
+
+void MainWindow::updateHistoryDisplay()
+{
+    if (m_recognitionHistory.isEmpty())
+    {
+        m_historyTextEdit->setPlainText("暂无识别记录");
+        return;
+    }
+
+    // 倒序显示（最新的在上面）
+    QStringList reversedHistory = m_recognitionHistory;
+    std::reverse(reversedHistory.begin(), reversedHistory.end());
+
+    QString displayText = reversedHistory.join("\n\n");
+    m_historyTextEdit->setPlainText(displayText);
+
+    // 滚动到顶部显示最新记录
+    QTextCursor cursor = m_historyTextEdit->textCursor();
+    cursor.movePosition(QTextCursor::Start);
+    m_historyTextEdit->setTextCursor(cursor);
+}
+
+void MainWindow::showRecognitionHint(const QString& result)
+{
+    // 停止之前的定时器
+    m_hintTimer->stop();
+
+    // 设置提示文本
+    QString hintText;
+    if (result == m_lastRecognizedContent && m_recognitionHistory.size() > 1)
+    {
+        hintText = "✓ 检测到相同二维码，未重复记录";
+    }
+    else
+    {
+        hintText = QString("✓ 新识别到二维码：%1")
+                       .arg(result.length() > 30 ? result.left(30) + "..." : result);
+
+        // 添加自动操作提示
+        QStringList actions;
+        if (m_autoCopyEnabled)
+        {
+            actions << "已复制";
+        }
+        if (m_autoOpenUrlEnabled && isValidUrl(result))
+        {
+            actions << "已打开网址";
+        }
+
+        if (!actions.isEmpty())
+        {
+            hintText += QString(" (%1)").arg(actions.join(", "));
+        }
+    }
+
+    m_recognitionHintLabel->setText(hintText);
+    m_recognitionHintLabel->show();
+
+    // 3秒后自动隐藏
+    m_hintTimer->start();
+}
+
+void MainWindow::onAutoOpenUrlChanged(bool enabled)
+{
+    m_autoOpenUrlEnabled = enabled;
+    qDebug() << "Auto open URL changed to:" << enabled;
+}
+
+void MainWindow::onClearHistory()
+{
+    int ret = QMessageBox::question(this, "确认清空", "确定要清空所有识别历史记录吗？",
+                                    QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+
+    if (ret == QMessageBox::Yes)
+    {
+        m_recognitionHistory.clear();
+        m_lastRecognizedContent.clear();
+        updateHistoryDisplay();
+
+        // 显示清空成功提示
+        m_recognitionHintLabel->setText("✓ 历史记录已清空");
+        m_recognitionHintLabel->show();
+        m_hintTimer->start();
+    }
+}
+void MainWindow::onAutoCopyChanged(bool enabled)
+{
+    m_autoCopyEnabled = enabled;
+    qDebug() << "Auto copy changed to:" << enabled;
+}
+
+void MainWindow::handleAutoActions(const QString& result)
+{
+    // 自动复制到剪贴板
+    if (m_autoCopyEnabled)
+    {
+        autoCopyToClipboard(result);
+    }
+
+    // 自动打开网址
+    if (m_autoOpenUrlEnabled && isValidUrl(result))
+    {
+        autoOpenUrl(result);
+    }
+}
+
+bool MainWindow::isValidUrl(const QString& text)
+{
+    QUrl url(text);
+
+    // 检查是否为有效的URL且协议为http或https
+    if (!url.isValid())
+    {
+        return false;
+    }
+
+    QString scheme = url.scheme().toLower();
+    if (scheme != "http" && scheme != "https" && scheme != "ftp")
+    {
+        // 尝试添加http://前缀
+        url.setUrl("http://" + text);
+        if (!url.isValid())
+        {
+            return false;
+        }
+        scheme = url.scheme().toLower();
+    }
+
+    // 检查是否有有效的主机名
+    QString host = url.host();
+    if (host.isEmpty())
+    {
+        return false;
+    }
+
+    // 简单的域名格式检查
+    if (host.contains('.') && host.length() > 3)
+    {
+        return true;
+    }
+
+    return false;
+}
+
+void MainWindow::autoOpenUrl(const QString& url)
+{
+    try
+    {
+        QString processedUrl = url;
+
+        // 如果URL没有协议前缀，添加http://
+        if (!processedUrl.startsWith("http://") && !processedUrl.startsWith("https://") &&
+            !processedUrl.startsWith("ftp://"))
+        {
+            processedUrl = "http://" + processedUrl;
+        }
+
+        QUrl qurl(processedUrl);
+        if (qurl.isValid())
+        {
+            bool success = QDesktopServices::openUrl(qurl);
+            if (success)
+            {
+                qDebug() << "Successfully opened URL:" << processedUrl;
+            }
+            else
+            {
+                qDebug() << "Failed to open URL:" << processedUrl;
+                // 更新提示显示失败信息
+                m_recognitionHintLabel->setText("✗ 打开网址失败");
+                m_recognitionHintLabel->setStyleSheet(
+                    "QLabel { background-color: #f8d7da; color: #721c24; border: 1px solid "
+                    "#f5c6cb; "
+                    "border-radius: 5px; padding: 8px; margin: 5px; }");
+                m_recognitionHintLabel->show();
+                m_hintTimer->start();
+            }
+        }
+        else
+        {
+            qDebug() << "Invalid URL format:" << processedUrl;
+        }
+    }
+    catch (const std::exception& e)
+    {
+        qDebug() << "Exception opening URL:" << e.what();
+    }
+}
+
+void MainWindow::autoCopyToClipboard(const QString& text)
+{
+    try
+    {
+        QClipboard* clipboard = QApplication::clipboard();
+        if (clipboard)
+        {
+            clipboard->setText(text);
+            qDebug() << "Content copied to clipboard:" << text.left(50) + "...";
+        }
+        else
+        {
+            qDebug() << "Failed to access clipboard";
+        }
+    }
+    catch (const std::exception& e)
+    {
+        qDebug() << "Exception copying to clipboard:" << e.what();
+    }
+}
+void MainWindow::updateRecognizeActionButtons(const QString& result)
+{
+    // 检查是否识别成功
+    bool recognitionSuccess = !result.startsWith("未找到") && !result.startsWith("识别错误");
+
+    // 复制按钮：识别成功时启用
+    m_copyResultButton->setEnabled(recognitionSuccess);
+
+    // 打开网址按钮：识别成功且内容是有效网址时启用
+    bool isUrl = recognitionSuccess && isValidUrl(result);
+    m_openUrlButton->setEnabled(isUrl);
+
+    // 更新按钮文本和提示
+    if (recognitionSuccess)
+    {
+        m_copyResultButton->setText("复制内容");
+        m_copyResultButton->setToolTip(
+            QString("复制识别结果：%1")
+                .arg(result.length() > 50 ? result.left(50) + "..." : result));
+
+        if (isUrl)
+        {
+            m_openUrlButton->setText("打开网址");
+            m_openUrlButton->setToolTip(QString("在浏览器中打开：%1").arg(result));
+        }
+        else
+        {
+            m_openUrlButton->setText("非网址内容");
+            m_openUrlButton->setToolTip("识别结果不是有效的网址格式");
+        }
+    }
+    else
+    {
+        m_copyResultButton->setText("复制内容");
+        m_copyResultButton->setToolTip("识别成功后可复制内容");
+
+        m_openUrlButton->setText("打开网址");
+        m_openUrlButton->setToolTip("识别成功后如果是网址可以打开");
+    }
+}
+
+void MainWindow::onCopyRecognizedText()
+{
+    if (m_currentRecognizedText.isEmpty() || m_currentRecognizedText.startsWith("未找到") ||
+        m_currentRecognizedText.startsWith("识别错误"))
+    {
+        QMessageBox::warning(this, "提示", "没有可复制的有效内容！");
+        return;
+    }
+
+    try
+    {
+        QClipboard* clipboard = QApplication::clipboard();
+        if (clipboard)
+        {
+            clipboard->setText(m_currentRecognizedText);
+
+            // 显示成功提示
+            m_statusLabel->setText("内容已复制到剪贴板");
+            QMessageBox::information(this, "复制成功",
+                                     QString("已将以下内容复制到剪贴板：\n\n%1")
+                                         .arg(m_currentRecognizedText.length() > 200
+                                                  ? m_currentRecognizedText.left(200) + "..."
+                                                  : m_currentRecognizedText));
+
+            qDebug() << "Content copied to clipboard from recognize mode:"
+                     << m_currentRecognizedText;
+        }
+        else
+        {
+            QMessageBox::warning(this, "复制失败", "无法访问系统剪贴板！");
+        }
+    }
+    catch (const std::exception& e)
+    {
+        QMessageBox::critical(this, "复制失败", QString("复制时发生错误：%1").arg(e.what()));
+        qDebug() << "Exception copying to clipboard in recognize mode:" << e.what();
+    }
+}
+
+void MainWindow::onOpenRecognizedUrl()
+{
+    if (m_currentRecognizedText.isEmpty() || m_currentRecognizedText.startsWith("未找到") ||
+        m_currentRecognizedText.startsWith("识别错误"))
+    {
+        QMessageBox::warning(this, "提示", "没有可打开的有效网址！");
+        return;
+    }
+
+    if (!isValidUrl(m_currentRecognizedText))
+    {
+        QMessageBox::warning(this, "提示", "识别结果不是有效的网址格式！");
+        return;
+    }
+
+    try
+    {
+        QString processedUrl = m_currentRecognizedText;
+
+        // 如果URL没有协议前缀，添加http://
+        if (!processedUrl.startsWith("http://") && !processedUrl.startsWith("https://") &&
+            !processedUrl.startsWith("ftp://"))
+        {
+            processedUrl = "http://" + processedUrl;
+        }
+
+        QUrl qurl(processedUrl);
+        if (qurl.isValid())
+        {
+            // 确认对话框
+            int ret = QMessageBox::question(
+                this, "确认打开",
+                QString("确定要在浏览器中打开以下网址吗？\n\n%1").arg(processedUrl),
+                QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
+
+            if (ret == QMessageBox::Yes)
+            {
+                bool success = QDesktopServices::openUrl(qurl);
+                if (success)
+                {
+                    m_statusLabel->setText("网址已在浏览器中打开");
+                    qDebug() << "Successfully opened URL from recognize mode:" << processedUrl;
+                }
+                else
+                {
+                    QMessageBox::warning(this, "打开失败",
+                                         "无法打开网址，请检查系统设置或手动复制网址到浏览器。");
+                    qDebug() << "Failed to open URL from recognize mode:" << processedUrl;
+                }
+            }
+        }
+        else
+        {
+            QMessageBox::warning(this, "网址错误", "网址格式无效，无法打开。");
+            qDebug() << "Invalid URL format in recognize mode:" << processedUrl;
+        }
+    }
+    catch (const std::exception& e)
+    {
+        QMessageBox::critical(this, "打开失败", QString("打开网址时发生错误：%1").arg(e.what()));
+        qDebug() << "Exception opening URL in recognize mode:" << e.what();
+    }
 }

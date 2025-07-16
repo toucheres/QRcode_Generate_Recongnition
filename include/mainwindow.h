@@ -17,6 +17,9 @@
 #include <QCheckBox>
 #include <QSlider>
 #include <QGroupBox>
+#include <QClipboard>
+#include <QDesktopServices>
+#include <QUrl>
 
 // Qt Multimedia includes
 #include <QCamera>
@@ -61,6 +64,8 @@ class MainWindow : public QMainWindow
     void onLoadFromUrl();
     void onUrlInputChanged();
     void onNetworkReplyFinished();
+    void onCopyRecognizedText();     // 新增：复制识别结果
+    void onOpenRecognizedUrl();      // 新增：打开识别的网址
     
     // 摄像头模式
     void onToggleCamera();
@@ -69,6 +74,9 @@ class MainWindow : public QMainWindow
     void onImageCaptured(int id, const QImage& image);
     void onCameraError(QCamera::Error error);
     void onRecognitionTimerTimeout();
+    void onClearHistory();  // 新增：清空历史记录
+    void onAutoOpenUrlChanged(bool enabled);  // 新增：自动跳转网址选项变化
+    void onAutoCopyChanged(bool enabled);     // 新增：自动复制选项变化
     
     // 通用
     void onModeChanged(int index);
@@ -98,11 +106,19 @@ class MainWindow : public QMainWindow
     QString recognizeQRCodeFromPixmap(const QPixmap& pixmap);
     void displayRecognitionResult(const QString& result);
     void displaySelectedImage(const QPixmap& pixmap);
+    void updateRecognizeActionButtons(const QString& result);  // 新增：更新操作按钮状态
     
     // 摄像头相关
     void recognizeFromVideoFrame();
     void checkCameraPermissions();
     void debugCameraInfo();
+    void addToHistory(const QString& result);  // 新增：添加到历史记录
+    void updateHistoryDisplay();  // 新增：更新历史记录显示
+    void showRecognitionHint(const QString& result);  // 新增：显示识别提示
+    void handleAutoActions(const QString& result);  // 新增：处理自动操作
+    bool isValidUrl(const QString& text);  // 新增：判断是否为有效网址
+    void autoOpenUrl(const QString& url);  // 新增：自动打开网址
+    void autoCopyToClipboard(const QString& text);  // 新增：自动复制到剪贴板
 
     // UI组件 - 主界面
     QWidget* m_centralWidget;
@@ -138,6 +154,12 @@ class MainWindow : public QMainWindow
     QTextEdit* m_resultTextEdit;
     QLabel* m_statusLabel;
     
+    // 新增：识别模式操作按钮
+    QGroupBox* m_recognizeActionsGroup;
+    QPushButton* m_copyResultButton;
+    QPushButton* m_openUrlButton;
+    QString m_currentRecognizedText;  // 存储当前识别结果
+    
     // UI组件 - 摄像头识别
     QWidget* m_cameraWidget;
     QComboBox* m_cameraComboBox;
@@ -146,6 +168,17 @@ class MainWindow : public QMainWindow
     QVideoWidget* m_videoWidget;
     QLabel* m_cameraStatusLabel;
     QTextEdit* m_cameraResultTextEdit;
+    
+    // 新增：历史记录相关UI
+    QGroupBox* m_historyGroup;
+    QTextEdit* m_historyTextEdit;
+    QPushButton* m_clearHistoryButton;
+    QLabel* m_recognitionHintLabel;
+    
+    // 新增：自动功能相关UI
+    QGroupBox* m_autoActionsGroup;
+    QCheckBox* m_autoOpenUrlCheckBox;
+    QCheckBox* m_autoCopyCheckBox;
     
     // 网络相关
     QNetworkAccessManager* m_networkManager;
@@ -158,4 +191,13 @@ class MainWindow : public QMainWindow
     QTimer* m_recognitionTimer;
     bool m_cameraActive;
     QList<QCameraDevice> m_availableCameras;
+    
+    // 新增：历史记录相关
+    QStringList m_recognitionHistory;
+    QString m_lastRecognizedContent;
+    QTimer* m_hintTimer;  // 用于控制提示显示时间
+    
+    // 新增：自动功能相关
+    bool m_autoOpenUrlEnabled;
+    bool m_autoCopyEnabled;
 };
