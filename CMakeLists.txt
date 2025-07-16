@@ -1,34 +1,25 @@
 cmake_minimum_required(VERSION 3.14)
 
 if (WIN32)
-    project(QRcode_Generate_Recongnise LANGUAGES CXX)
+    project(QRcode_Generator_Recongniser LANGUAGES CXX)
 elseif(UNIX)
-    project(QRcode_Generate_Recongnise)
+    project(QRcode_Generator_Recongniser)
 endif()
 
-set(CMAKE_CONFIGURATION_TYPES "Release;RelWithDebInfo;Debug" CACHE STRING "" FORCE)
+#set(CMAKE_CONFIGURATION_TYPES "Release;RelWithDebInfo" CACHE STRING "" FORCE)
 
-# 设置C++标准
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
+# #======================= INCLUSION OF Qt =======================#
+# set(CMAKE_INCLUDE_CURRENT_DIR ON)
+# set(CMAKE_AUTOMOC ON)
+# set(CMAKE_AUTOUIC ON)
+# set(CMAKE_AUTORCC ON)
+# set(CMAKE_PREFIX_PATH $ENV{QTDIR})
 
-#======================= INCLUSION OF Qt =======================#
-set(CMAKE_INCLUDE_CURRENT_DIR ON)
-set(CMAKE_AUTOMOC ON)
-set(CMAKE_AUTOUIC ON)
-set(CMAKE_AUTORCC ON)
-set(CMAKE_PREFIX_PATH $ENV{QTDIR})
-find_package(Qt6Core REQUIRED)
-find_package(Qt6Widgets REQUIRED)
-find_package(Qt6 REQUIRED COMPONENTS Core5Compat)
-find_package(Qt6 REQUIRED COMPONENTS Network)
-find_package(Qt6 REQUIRED COMPONENTS Multimedia)
-find_package(Qt6 REQUIRED COMPONENTS MultimediaWidgets)
-
-# 添加头文件目录
-include_directories(include)
-include_directories(3rd/zxing/core/src)
-
+find_package(Qt6 REQUIRED COMPONENTS Core Widgets MultimediaWidgets Multimedia Core5Compat)
+#=================== INCLUSION OF Project Files ====================#
+set(FORMS_DIR "${CMAKE_SOURCE_DIR}/forms")
+set(INCLUDE_DIR "${CMAKE_SOURCE_DIR}/include")
+set(SOURCE_DIR "${CMAKE_SOURCE_DIR}/src")
 # 修改 ZXing 配置
 set(BUILD_EXAMPLES OFF)
 set(BUILD_BLACKBOX_TESTS OFF)
@@ -47,47 +38,54 @@ endif()
 
 # 直接添加 ZXing 核心库
 add_subdirectory(3rd/zxing/core)
-
-# 源文件
-set(SOURCES
-    src/main.cpp
-    src/mainwindow.cpp
+include_directories(${FORMS_DIR})
+include_directories(${INCLUDE_DIR})
+include_directories(${SOURCE_DIR})
+include_directories(3rd/zxing/core/src)
+file(GLOB_RECURSE SOURCES
+    "${FORMS_DIR}/*.ui"
+    "${FORMS_DIR}/*.qrc"
+    "${INCLUDE_DIR}/*.h"
+    "${SOURCE_DIR}/*.cpp"
 )
 
-# 头文件
-set(HEADERS
-    include/mainwindow.h
+#=================== SETUP EXECTUABLE ====================#
+# Enable debug logging on RELWITHDEBINFO configuration
+set_property(DIRECTORY APPEND PROPERTY COMPILE_DEFINITIONS
+    $<$<CONFIG:RELWITHDEBINFO>:QT_MESSAGELOGCONTEXT>
 )
 
-# 创建可执行文件
-add_executable(${PROJECT_NAME} ${SOURCES} ${HEADERS})
+#${CMAKE_AUTOUIC_SEARCH_PATHS}可能默认为cmakelists同级目录
+message("--------------------------")
+message(STATUS ${CMAKE_AUTOUIC_SEARCH_PATHS})
+message("--------------------------")
 
-# 链接库
-target_link_libraries(${PROJECT_NAME}
-    Qt6::Core
-    Qt6::Widgets
-    Qt6::Core5Compat
-    Qt6::Multimedia
-    Qt6::MultimediaWidgets
-    Qt6::Network
-    ZXing
-)
+#!!!必须将包含.ui .qrc的目录写入
+# Add the forms directory to the AUTOUIC search paths
+set(CMAKE_AUTOUIC_SEARCH_PATHS ${CMAKE_AUTOUIC_SEARCH_PATHS} ${FORMS_DIR})
 
-# 设置目标属性
-set_target_properties(${PROJECT_NAME} PROPERTIES
-    WIN32_EXECUTABLE TRUE
-)
+message("--------------------------")
+message(STATUS ${CMAKE_AUTOUIC_SEARCH_PATHS})
+message("--------------------------")
 
-# 输出调试信息
-message(STATUS "ZXing experimental API: ${ZXING_EXPERIMENTAL_API}")
-message(STATUS "Project source dir: ${CMAKE_CURRENT_SOURCE_DIR}")
-
-# 复制 Qt 运行时库（Windows）
-if(WIN32)
-    find_program(WINDEPLOYQT_EXECUTABLE windeployqt HINTS ${Qt6_DIR}/../../../bin)
-    if(WINDEPLOYQT_EXECUTABLE)
-        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-            COMMAND ${WINDEPLOYQT_EXECUTABLE} $<TARGET_FILE:${PROJECT_NAME}>
-            COMMENT "Deploying Qt libraries")
-    endif()
+# Add the executable
+if (WIN32) 
+    add_executable(QRcode_Generator_Recongniser WIN32 ${SOURCES})
+elseif(UNIX)
+    add_executable(QRcode_Generator_Recongniser ${SOURCES})
 endif()
+# 建议使用set_target_properties来代替全局set
+set_target_properties(QRcode_Generator_Recongniser PROPERTIES
+    AUTOMOC ON    # 处理Q_OBJECT宏
+    AUTOUIC ON    # 处理.ui文件
+    AUTORCC ON    # 处理.qrc文件
+)
+# Add the target includes for MY_PROJECT 
+target_include_directories(QRcode_Generator_Recongniser PRIVATE ${FORMS_DIR})
+target_include_directories(QRcode_Generator_Recongniser PRIVATE ${INCLUDE_DIR})
+target_include_directories(QRcode_Generator_Recongniser PRIVATE ${SOURCE_DIR})
+
+#===================== LINKING LIBRARIES =======================#
+#===================== LINKING LIBRARIES =======================#
+
+target_link_libraries(QRcode_Generator_Recongniser Qt6::Widgets Qt6::Multimedia Qt6::MultimediaWidgets Qt6::Core5Compat ZXing)
