@@ -24,7 +24,7 @@ endif()
 
 #set(CMAKE_CONFIGURATION_TYPES "Release;RelWithDebInfo" CACHE STRING "" FORCE)
 
-find_package(Qt6 REQUIRED COMPONENTS Core Widgets MultimediaWidgets Multimedia Core5Compat)
+find_package(Qt6 REQUIRED COMPONENTS Core Widgets MultimediaWidgets Multimedia Core5Compat Svg)
 
 #=================== INCLUSION OF Project Files ====================#
 set(FORMS_DIR "${CMAKE_SOURCE_DIR}/forms")
@@ -132,6 +132,7 @@ target_link_libraries(QRcode_Generator_Recongniser
     Qt6::Multimedia 
     Qt6::MultimediaWidgets 
     Qt6::Core5Compat 
+    Qt6::Svg
     ZXing
 )
 
