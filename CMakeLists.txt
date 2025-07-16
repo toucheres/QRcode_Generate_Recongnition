@@ -27,14 +27,25 @@ find_package(Qt6 REQUIRED COMPONENTS MultimediaWidgets)
 
 # 添加头文件目录
 include_directories(include)
+include_directories(3rd/zxing/core/src)
 
-# 修改 ZXing 配置，禁用 stb 下载
+# 修改 ZXing 配置
 set(BUILD_EXAMPLES OFF)
 set(BUILD_BLACKBOX_TESTS OFF)
 set(BUILD_UNIT_TESTS OFF)
 set(BUILD_DEPENDENCIES OFF)
 
-# 直接添加 ZXing 核心库而不依赖 stb
+# 检查ZXing是否支持实验性API
+set(ZXING_EXPERIMENTAL_API OFF)
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/3rd/zxing/core/src/WriteBarcode.h")
+    message(STATUS "Found WriteBarcode.h - enabling experimental API")
+    set(ZXING_EXPERIMENTAL_API ON)
+    add_definitions(-DZXING_EXPERIMENTAL_API)
+else()
+    message(STATUS "WriteBarcode.h not found - using legacy API")
+endif()
+
+# 直接添加 ZXing 核心库
 add_subdirectory(3rd/zxing/core)
 
 # 源文件
@@ -66,6 +77,10 @@ target_link_libraries(${PROJECT_NAME}
 set_target_properties(${PROJECT_NAME} PROPERTIES
     WIN32_EXECUTABLE TRUE
 )
+
+# 输出调试信息
+message(STATUS "ZXing experimental API: ${ZXING_EXPERIMENTAL_API}")
+message(STATUS "Project source dir: ${CMAKE_CURRENT_SOURCE_DIR}")
 
 # 复制 Qt 运行时库（Windows）
 if(WIN32)

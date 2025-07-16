@@ -13,6 +13,10 @@
 #include <QNetworkReply>
 #include <QTimer>
 #include <QComboBox>
+#include <QSpinBox>
+#include <QCheckBox>
+#include <QSlider>
+#include <QGroupBox>
 
 // Qt Multimedia includes
 #include <QCamera>
@@ -21,15 +25,20 @@
 #include <QMediaCaptureSession>
 #include <QVideoFrame>
 
-// ZXing includes
-#include "WriteBarcode.h"
+// ZXing includes - 确保正确的头文件顺序和包含
 #include "BarcodeFormat.h"
 #include "BitMatrix.h"
 #include "ReadBarcode.h"
 #include "ImageView.h"
 
-#ifndef ZXING_EXPERIMENTAL_API
-#include "CharacterSet.h"
+// 检查实验性API是否可用
+#ifdef ZXING_EXPERIMENTAL_API
+    #include "WriteBarcode.h"
+    #define USE_EXPERIMENTAL_API 1
+#else
+    #include "MultiFormatWriter.h"
+    #include "CharacterSet.h"
+    #define USE_EXPERIMENTAL_API 0
 #endif
 
 class MainWindow : public QMainWindow
@@ -43,6 +52,9 @@ class MainWindow : public QMainWindow
   private slots:
     // 生成模式
     void onGenerateQRCode();
+    void onSelectLogoImage();  // 新增：选择中心图片
+    void onEmbedLogoChanged(bool enabled);  // 新增：启用/禁用图片嵌入
+    void onLogoSizeChanged(int size);  // 新增：调整图片大小
     
     // 识别模式
     void onSelectImageFile();
@@ -74,6 +86,12 @@ class MainWindow : public QMainWindow
     // 生成相关
     QPixmap generateQRCodePixmap(const QString& text);
     QPixmap zxingMatrixToQPixmap(const ZXing::BitMatrix& matrix);
+    QPixmap embedLogoInQRCode(const QPixmap& qrCode, const QPixmap& logo, int logoSizePercent = 20);  // 新增
+    
+    // 新增：错误处理方法
+    QPixmap generateQRCodeWithFallback(const QString& text, const QString& ecLevel, int size);
+    QPixmap generateMinimalQRCode(const QString& text);  // 最简化生成方法
+    QPixmap createErrorQRCode();  // 创建错误提示图像
     
     // 识别相关
     QString recognizeQRCodeFromImage(const QImage& image);
@@ -83,8 +101,8 @@ class MainWindow : public QMainWindow
     
     // 摄像头相关
     void recognizeFromVideoFrame();
-    void checkCameraPermissions();  // 新增
-    void debugCameraInfo();         // 新增
+    void checkCameraPermissions();
+    void debugCameraInfo();
 
     // UI组件 - 主界面
     QWidget* m_centralWidget;
@@ -96,6 +114,19 @@ class MainWindow : public QMainWindow
     QLineEdit* m_textInput;
     QPushButton* m_generateButton;
     QLabel* m_qrCodeLabel;
+    
+    // 新增：二维码生成选项控件
+    QGroupBox* m_qrOptionsGroup;
+    QComboBox* m_errorCorrectionCombo;
+    QSpinBox* m_qrSizeSpinBox;
+    QCheckBox* m_embedLogoCheckBox;
+    QPushButton* m_selectLogoButton;
+    QLabel* m_logoPreviewLabel;
+    QSlider* m_logoSizeSlider;
+    QLabel* m_logoSizeLabel;
+    
+    // 新增：存储logo图片
+    QPixmap m_logoPixmap;
     
     // UI组件 - 识别模式
     QWidget* m_recognizeWidget;
