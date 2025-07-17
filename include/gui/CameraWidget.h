@@ -78,6 +78,9 @@ private:
     void drawDetectionOverlay(const QRCodeRecognizer::RecognitionResult& result);
     void applyDefaultStyles() override;
 
+protected:
+    void resizeEvent(QResizeEvent* event) override;
+
 private:
     // Core components
     QRCodeRecognizer* m_recognizer;
@@ -88,6 +91,7 @@ private:
     QVideoWidget* m_videoWidget;
     QImageCapture* m_imageCapture;
     QVideoSink* m_videoSink;
+    QLabel* m_overlayLabel;  // 叠加层用于显示轮廓
     
     // UI components - Camera controls
     QGroupBox* m_cameraGroup;
@@ -114,6 +118,7 @@ private:
     
     // Recognition timer and settings
     QTimer* m_recognitionTimer;
+    QTimer* m_overlayTimer;  // 叠加层显示计时器
     QVideoFrame m_currentFrame;
     QList<QRCodeRecognizer::RecognitionResult> m_detectionHistory;
     
@@ -123,4 +128,5 @@ private:
     int m_detectionCount;
     QDateTime m_lastDetectionTime;
     QString m_lastDetectedText;
+    QSize m_lastImageSize;  // 记录最后处理的图像尺寸，用于坐标转换
 };

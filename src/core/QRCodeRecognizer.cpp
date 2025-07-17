@@ -243,6 +243,10 @@ QList<QRCodeRecognizer::RecognitionResult> QRCodeRecognizer::recognizeMultiForma
         // 预处理图像
         QImage processedImage = preprocessImage(image);
         
+        // 计算缩放比例（用于坐标转换）
+        double scaleX = static_cast<double>(image.width()) / processedImage.width();
+        double scaleY = static_cast<double>(image.height()) / processedImage.height();
+        
         // 创建ZXing的ImageView
         ZXing::ImageView imageView(processedImage.bits(), 
                                   processedImage.width(), 
@@ -266,7 +270,23 @@ QList<QRCodeRecognizer::RecognitionResult> QRCodeRecognizer::recognizeMultiForma
                 RecognitionResult result;
                 result.text = QString::fromUtf8(barcode.text().c_str());
                 result.isValid = true;
-                result.position = barcode.position();
+                
+                // 获取原始位置并缩放到原图坐标系
+                auto originalPosition = barcode.position();
+                
+                // 缩放四个角点坐标
+                ZXing::PointI topLeft(static_cast<int>(originalPosition.topLeft().x * scaleX),
+                                      static_cast<int>(originalPosition.topLeft().y * scaleY));
+                ZXing::PointI topRight(static_cast<int>(originalPosition.topRight().x * scaleX),
+                                       static_cast<int>(originalPosition.topRight().y * scaleY));
+                ZXing::PointI bottomRight(static_cast<int>(originalPosition.bottomRight().x * scaleX),
+                                          static_cast<int>(originalPosition.bottomRight().y * scaleY));
+                ZXing::PointI bottomLeft(static_cast<int>(originalPosition.bottomLeft().x * scaleX),
+                                         static_cast<int>(originalPosition.bottomLeft().y * scaleY));
+                
+                // 构造缩放后的四边形
+                ZXing::QuadrilateralI scaledPosition(topLeft, topRight, bottomRight, bottomLeft);
+                result.position = scaledPosition;
                 result.format = QString::fromStdString(ToString(barcode.format()));
                 result.confidence = 1.0; // ZXing不直接提供置信度
                 

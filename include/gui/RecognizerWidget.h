@@ -118,6 +118,7 @@ private:
     // Data
     QImage m_currentImage;
     QPixmap m_currentPixmap;
+    QPixmap m_currentPixmapWithContour;  // 保存带轮廓的图像
     QList<QRCodeRecognizer::RecognitionResult> m_results;
     int m_requestCounter;
     

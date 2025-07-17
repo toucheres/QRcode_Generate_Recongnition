@@ -52,6 +52,21 @@ QRCodeRecognizer::RecognitionConfig RecognizerWidget::getConfig() const
 void RecognizerWidget::showRecognitionResult(const QRCodeRecognizer::RecognitionResult& result)
 {
     updateResultDisplay(result);
+    
+    // 在原图像上绘制识别轮廓
+    if (result.isValid && !m_currentPixmap.isNull()) {
+        QPixmap contourImage = m_recognizer->drawContour(m_currentPixmap, result);
+        
+        // 更新显示的图像
+        QPixmap displayPixmap = contourImage.scaled(m_imageLabel->size(), 
+                                                   Qt::KeepAspectRatio, 
+                                                   Qt::SmoothTransformation);
+        m_imageLabel->setPixmap(displayPixmap);
+        
+        // 保存带轮廓的图像，用于后续操作
+        m_currentPixmapWithContour = contourImage;
+    }
+    
     m_statusLabel->setText("识别完成");
     m_progressBar->setVisible(false);
 }
@@ -94,6 +109,21 @@ void RecognizerWidget::showMultiFormatResults(
 
     // 更新单个结果显示（显示最流行的）
     updateResultDisplay(results.first());
+    
+    // 在原图像上绘制识别轮廓（显示最流行的结果）
+    if (!results.isEmpty() && results.first().isValid && !m_currentPixmap.isNull()) {
+        QPixmap contourImage = m_recognizer->drawContour(m_currentPixmap, results.first());
+        
+        // 更新显示的图像
+        QPixmap displayPixmap = contourImage.scaled(m_imageLabel->size(), 
+                                                   Qt::KeepAspectRatio, 
+                                                   Qt::SmoothTransformation);
+        m_imageLabel->setPixmap(displayPixmap);
+        
+        // 保存带轮廓的图像
+        m_currentPixmapWithContour = contourImage;
+    }
+    
     m_statusLabel->setText(QString("识别完成 - 找到%1种格式").arg(results.size()));
     m_progressBar->setVisible(false);
 }
