@@ -28,9 +28,9 @@ QRCodeGenerator::GenerationConfig GeneratorWidget::getConfig() const
     // 设置条码格式
     QString formatText = m_formatCombo->currentText();
     if (formatText.startsWith("QR Code")) config.format = ZXing::BarcodeFormat::QRCode;
-    else if (formatText.startsWith("Micro QR Code")) config.format = ZXing::BarcodeFormat::MicroQRCode;
     else if (formatText.startsWith("Data Matrix")) config.format = ZXing::BarcodeFormat::DataMatrix;
     else if (formatText.startsWith("PDF417")) config.format = ZXing::BarcodeFormat::PDF417;
+    else if (formatText.startsWith("Aztec")) config.format = ZXing::BarcodeFormat::Aztec;
     else if (formatText.startsWith("Code 128")) config.format = ZXing::BarcodeFormat::Code128;
     else if (formatText.startsWith("Code 39")) config.format = ZXing::BarcodeFormat::Code39;
     else if (formatText.startsWith("Code 93")) config.format = ZXing::BarcodeFormat::Code93;
@@ -40,8 +40,6 @@ QRCodeGenerator::GenerationConfig GeneratorWidget::getConfig() const
     else if (formatText.startsWith("UPC-A")) config.format = ZXing::BarcodeFormat::UPCA;
     else if (formatText.startsWith("UPC-E")) config.format = ZXing::BarcodeFormat::UPCE;
     else if (formatText.startsWith("ITF")) config.format = ZXing::BarcodeFormat::ITF;
-    else if (formatText.startsWith("Aztec")) config.format = ZXing::BarcodeFormat::Aztec;
-    else if (formatText.startsWith("MaxiCode")) config.format = ZXing::BarcodeFormat::MaxiCode;
     else config.format = ZXing::BarcodeFormat::QRCode; // 默认QR码
     
     // 设置自定义文本配置
@@ -97,47 +95,41 @@ void GeneratorWidget::setConfig(const QRCodeGenerator::GenerationConfig& config)
         case ZXing::BarcodeFormat::QRCode:
             m_formatCombo->setCurrentText("QR Code - 二维码 (支持汉字、网址、文本)");
             break;
-        case ZXing::BarcodeFormat::MicroQRCode:
-            m_formatCombo->setCurrentText("Micro QR Code - 微型二维码 (小容量数据)");
-            break;
         case ZXing::BarcodeFormat::DataMatrix:
             m_formatCombo->setCurrentText("Data Matrix - 数据矩阵 (高密度存储)");
             break;
         case ZXing::BarcodeFormat::PDF417:
             m_formatCombo->setCurrentText("PDF417 - PDF417码 (大容量文档)");
             break;
+        case ZXing::BarcodeFormat::Aztec:
+            m_formatCombo->setCurrentText("Aztec - 阿兹特克码 (高效二维)");
+            break;
         case ZXing::BarcodeFormat::Code128:
             m_formatCombo->setCurrentText("Code 128 - 一维条码 (字母数字)");
             break;
         case ZXing::BarcodeFormat::Code39:
-            m_formatCombo->setCurrentText("Code 39 - 一维条码 (基础字符)");
+            m_formatCombo->setCurrentText("Code 39 - 一维条码 (大写字母数字)");
             break;
         case ZXing::BarcodeFormat::Code93:
-            m_formatCombo->setCurrentText("Code 93 - 一维条码 (扩展字符)");
+            m_formatCombo->setCurrentText("Code 93 - 一维条码 (ASCII字符)");
             break;
         case ZXing::BarcodeFormat::Codabar:
             m_formatCombo->setCurrentText("Codabar - 库德巴码 (数字应用)");
             break;
         case ZXing::BarcodeFormat::EAN8:
-            m_formatCombo->setCurrentText("EAN-8 - 欧洲商品码 (8位)");
+            m_formatCombo->setCurrentText("EAN-8 - 欧洲商品码 (8位数字)");
             break;
         case ZXing::BarcodeFormat::EAN13:
-            m_formatCombo->setCurrentText("EAN-13 - 欧洲商品码 (13位)");
+            m_formatCombo->setCurrentText("EAN-13 - 欧洲商品码 (13位数字)");
             break;
         case ZXing::BarcodeFormat::UPCA:
-            m_formatCombo->setCurrentText("UPC-A - 美国商品码 (12位)");
+            m_formatCombo->setCurrentText("UPC-A - 美国商品码 (12位数字)");
             break;
         case ZXing::BarcodeFormat::UPCE:
             m_formatCombo->setCurrentText("UPC-E - 美国商品码 (缩短版)");
             break;
         case ZXing::BarcodeFormat::ITF:
-            m_formatCombo->setCurrentText("ITF - 交错25码 (数字对)");
-            break;
-        case ZXing::BarcodeFormat::Aztec:
-            m_formatCombo->setCurrentText("Aztec - 阿兹特克码 (高效二维)");
-            break;
-        case ZXing::BarcodeFormat::MaxiCode:
-            m_formatCombo->setCurrentText("MaxiCode - 最大码 (邮政应用)");
+            m_formatCombo->setCurrentText("ITF - 交错25码 (偶数位数字)");
             break;
         default:
             m_formatCombo->setCurrentText("QR Code - 二维码 (支持汉字、网址、文本)");
@@ -320,7 +312,7 @@ void GeneratorWidget::setupUI()
     // 文本输入
     basicLayout->addWidget(createLabel("输入文本:"));
     m_textInput = new QLineEdit();
-    m_textInput->setPlaceholderText("请输入要生成二维码的文本...");
+    m_textInput->setPlaceholderText("请输入文本（支持中文、英文、数字、网址等）...");
     basicLayout->addWidget(m_textInput);
     
     // 格式选择
@@ -328,20 +320,18 @@ void GeneratorWidget::setupUI()
     m_formatCombo = new QComboBox();
     m_formatCombo->addItems({
         "QR Code - 二维码 (支持汉字、网址、文本)",
-        "Micro QR Code - 微型二维码 (小容量数据)",
         "Data Matrix - 数据矩阵 (高密度存储)",
         "PDF417 - PDF417码 (大容量文档)",
-        "Code 128 - 一维条码 (字母数字)",
-        "Code 39 - 一维条码 (基础字符)",
-        "Code 93 - 一维条码 (扩展字符)",
-        "Codabar - 库德巴码 (数字应用)",
-        "EAN-8 - 欧洲商品码 (8位)",
-        "EAN-13 - 欧洲商品码 (13位)",
-        "UPC-A - 美国商品码 (12位)",
-        "UPC-E - 美国商品码 (缩短版)",
-        "ITF - 交错25码 (数字对)",
         "Aztec - 阿兹特克码 (高效二维)",
-        "MaxiCode - 最大码 (邮政应用)"
+        "Code 128 - 一维条码 (字母数字)",
+        "Code 39 - 一维条码 (大写字母数字)",
+        "Code 93 - 一维条码 (ASCII字符)",
+        "Codabar - 库德巴码 (数字应用)",
+        "EAN-8 - 欧洲商品码 (8位数字)",
+        "EAN-13 - 欧洲商品码 (13位数字)",
+        "UPC-A - 美国商品码 (12位数字)",
+        "UPC-E - 美国商品码 (缩短版)",
+        "ITF - 交错25码 (偶数位数字)"
     });
     m_formatCombo->setToolTip("选择要生成的条码格式\n"
                               "• 二维码格式可存储更多数据\n"
@@ -427,7 +417,7 @@ void GeneratorWidget::setupUI()
     
     textLayout->addWidget(createLabel("文本内容:"));
     m_customTextInput = new QLineEdit();
-    m_customTextInput->setPlaceholderText("请输入要显示的文本...");
+    m_customTextInput->setPlaceholderText("请输入要显示的文本（支持中文）...");
     m_customTextInput->setEnabled(false);
     textLayout->addWidget(m_customTextInput);
     

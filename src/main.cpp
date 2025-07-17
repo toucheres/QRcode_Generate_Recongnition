@@ -1,11 +1,15 @@
 #include <QApplication>
 #include <QDir>
 #include <QStandardPaths>
+#include <QTextCodec>
 #include "gui/MainWindow.h"
 
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
+    
+    // 设置UTF-8编码支持，确保中文正确处理
+    QTextCodec::setCodecForLocale(QTextCodec::codecForName("UTF-8"));
     
     // 设置应用程序信息
     app.setApplicationName("QR码生成识别器");

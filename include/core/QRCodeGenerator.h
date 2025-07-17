@@ -178,9 +178,28 @@ public:
      */
     int convertErrorCorrectionLevel(ErrorCorrectionLevel level);
 
+    /**
+     * @brief 验证格式和文本的兼容性
+     * @param format 条码格式
+     * @param text 文本内容
+     * @return 错误信息，空字符串表示验证通过
+     */
+    QString validateFormatAndText(ZXing::BarcodeFormat format, const QString& text);
 
+    /**
+     * @brief 检查指定格式是否支持字符编码设置
+     * @param format 条码格式
+     * @return 是否支持编码设置
+     */
+    bool supportsEncoding(ZXing::BarcodeFormat format);
 
-
+    /**
+     * @brief 根据格式准备文本编码
+     * @param format 条码格式
+     * @param text 原始文本
+     * @return 适合该格式的编码字符串
+     */
+    std::string prepareTextForFormat(ZXing::BarcodeFormat format, const QString& text);
 
 private:
     QString m_lastError;
