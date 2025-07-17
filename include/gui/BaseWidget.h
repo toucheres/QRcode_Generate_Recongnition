@@ -19,6 +19,13 @@ public:
     explicit BaseWidget(QWidget* parent = nullptr);
     virtual ~BaseWidget() = default;
 
+protected slots:
+    /**
+     * @brief 主题变化时调用
+     * @param isDark 是否为深色主题
+     */
+    virtual void onThemeChanged(bool isDark);
+
 protected:
     /**
      * @brief 创建垂直布局
@@ -73,6 +80,12 @@ protected:
      * @brief 应用默认样式
      */
     virtual void applyDefaultStyles();
+
+    /**
+     * @brief 检测当前是否为深色主题
+     * @return 如果是深色主题返回true，否则返回false
+     */
+    bool isDarkTheme() const;
 
 private:
     void setupBaseStyles();

@@ -12,6 +12,7 @@
 #include <QMediaDevices>
 #include <QMessageBox>
 #include <QPainter>
+#include <QPalette>
 #include <QPixmap>
 #include <QStringConverter>
 #include <QTextStream>
@@ -573,7 +574,11 @@ void CameraWidget::setupUI()
 
     // 摄像头状态和控制
     m_cameraStatusLabel = createLabel("摄像头未启动");
-    m_cameraStatusLabel->setStyleSheet("color: #666666; font-size: 10pt;");
+    // 根据主题设置状态标签颜色
+    QPalette palette = QApplication::palette();
+    bool isDarkTheme = palette.color(QPalette::Window).lightness() < 128;
+    QString statusColor = isDarkTheme ? "#cccccc" : "#666666";
+    m_cameraStatusLabel->setStyleSheet(QString("color: %1; font-size: 10pt;").arg(statusColor));
     cameraLayout->addWidget(m_cameraStatusLabel);
 
     QHBoxLayout* cameraControlLayout = createHBoxLayout(nullptr, 0);
@@ -639,7 +644,9 @@ void CameraWidget::setupUI()
     QVBoxLayout* resultsLayout = createVBoxLayout(m_resultsGroup, 10, 8);
 
     m_detectionCountLabel = createLabel("检测次数: 0");
-    m_detectionCountLabel->setStyleSheet("font-weight: bold; color: #2196F3;");
+    // 根据主题设置计数标签颜色
+    QString countColor = isDarkTheme ? "#4CAF50" : "#2196F3";
+    m_detectionCountLabel->setStyleSheet(QString("font-weight: bold; color: %1;").arg(countColor));
     resultsLayout->addWidget(m_detectionCountLabel);
 
     m_historyTextEdit = new QTextEdit();
@@ -861,16 +868,26 @@ void CameraWidget::addResultToHistory(const QRCodeRecognizer::RecognitionResult&
         m_detectionHistory.append(result);
 
         QString timestamp = QDateTime::currentDateTime().toString("hh:mm:ss");
+        
+        // 检测系统主题以调整HTML样式
+        QPalette palette = QApplication::palette();
+        bool isDarkTheme = palette.color(QPalette::Window).lightness() < 128;
+        
+        QString bgColor = isDarkTheme ? "#2d5a2d" : "#e8f5e8";
+        QString borderColor = isDarkTheme ? "#4CAF50" : "#4CAF50";
+        QString textColor = isDarkTheme ? "#ffffff" : "#000000";
+        
         QString resultHtml =
             QString("<div style='margin: 5px 0; padding: 8px; background-color: "
-                    "#e8f5e8; border-radius: 4px; border-left: 4px solid #4CAF50;'>"
+                    "%4; border-radius: 4px; border-left: 4px solid %5; color: %6;'>"
                     "<b>[%1]</b> 检测到二维码（新）<br/>"
                     "<b>内容:</b> %2<br/>"
                     "<b>格式:</b> %3"
                     "</div>")
                 .arg(timestamp)
                 .arg(result.text.toHtmlEscaped())
-                .arg(result.format);
+                .arg(result.format)
+                .arg(bgColor, borderColor, textColor);
 
         m_historyTextEdit->append(resultHtml);
 
@@ -883,11 +900,21 @@ void CameraWidget::addResultToHistory(const QRCodeRecognizer::RecognitionResult&
     {
         // 重复内容，只在界面提示
         QString timestamp = QDateTime::currentDateTime().toString("hh:mm:ss");
+        
+        // 检测系统主题以调整HTML样式
+        QPalette palette = QApplication::palette();
+        bool isDarkTheme = palette.color(QPalette::Window).lightness() < 128;
+        
+        QString bgColor = isDarkTheme ? "#404040" : "#f0f0f0";
+        QString borderColor = isDarkTheme ? "#999999" : "#999999";
+        QString textColor = isDarkTheme ? "#cccccc" : "#666666";
+        
         QString resultHtml = QString("<div style='margin: 2px 0; padding: 4px; background-color: "
-                                     "#f0f0f0; border-radius: 4px; border-left: 2px solid #999;'>"
+                                     "%4; border-radius: 4px; border-left: 2px solid %5; color: %6;'>"
                                      "<small><b>[%1]</b> 重复检测到相同内容</small>"
                                      "</div>")
-                                 .arg(timestamp);
+                                 .arg(timestamp)
+                                 .arg(bgColor, borderColor, textColor);
 
         m_historyTextEdit->append(resultHtml);
 
@@ -1042,9 +1069,16 @@ void CameraWidget::applyDefaultStyles()
 {
     BaseWidget::applyDefaultStyles();
 
+    // 检测系统主题
+    QPalette palette = QApplication::palette();
+    bool isDarkTheme = palette.color(QPalette::Window).lightness() < 128;
+    
+    QString borderColor = isDarkTheme ? "#555555" : "#cccccc";
+    
     // 应用特定样式
-    setStyleSheet(styleSheet() + "QVideoWidget { border: 2px solid #cccccc; border-radius: 8px; }"
-                                 "QTextEdit { border: 1px solid #cccccc; border-radius: 4px; }");
+    setStyleSheet(styleSheet() + QString("QVideoWidget { border: 2px solid %1; border-radius: 8px; }"
+                                        "QTextEdit { border: 1px solid %1; border-radius: 4px; }")
+                                        .arg(borderColor));
 }
 
 void CameraWidget::resizeEvent(QResizeEvent* event)

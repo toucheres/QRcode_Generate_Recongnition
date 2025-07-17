@@ -4,6 +4,11 @@
 #include <QFileDialog>
 #include <QMessageBox>
 #include <QApplication>
+#include <QPalette>
+#include <QScrollArea>
+#include <QFrame>
+#include <QFontMetrics>
+#include <QTimer>
 
 GeneratorWidget::GeneratorWidget(QWidget* parent)
     : BaseWidget(parent)
@@ -281,15 +286,24 @@ void GeneratorWidget::applyDefaultStyles()
 {
     BaseWidget::applyDefaultStyles();
     
+    // 检测系统主题
+    QPalette palette = QApplication::palette();
+    bool isDarkTheme = palette.color(QPalette::Window).lightness() < 128;
+    
+    QString borderColor = isDarkTheme ? "#555555" : "#cccccc";
+    QString backgroundColor = isDarkTheme ? "#3c3c3c" : "#f9f9f9";
+    QString textColor = isDarkTheme ? "#ffffff" : "#000000";
+    
     // 应用特定样式
     m_qrCodeLabel->setStyleSheet(
-        "QLabel {"
-        "    border: 2px dashed #cccccc;"
+        QString("QLabel {"
+        "    border: 2px dashed %1;"
         "    border-radius: 8px;"
-        "    background-color: #f9f9f9;"
+        "    background-color: %2;"
+        "    color: %3;"
         "    min-height: 300px;"
         "    text-align: center;"
-        "}"
+        "}").arg(borderColor, backgroundColor, textColor)
     );
 }
 
@@ -298,103 +312,147 @@ void GeneratorWidget::setupUI()
     setWindowTitle("二维码生成器");
     
     QGridLayout* mainLayout = new QGridLayout(this);
-    mainLayout->setSpacing(15);
+    mainLayout->setSpacing(10);
     
-    // 左侧：设置区域
+    // 左侧：设置区域 - 使用滚动区域
+    QScrollArea* scrollArea = new QScrollArea();
+    scrollArea->setWidgetResizable(true);
+    scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    scrollArea->setMaximumWidth(380);
+    scrollArea->setMinimumWidth(350);
+    
     QWidget* settingsWidget = new QWidget();
-    settingsWidget->setMaximumWidth(350);
-    QVBoxLayout* settingsLayout = createVBoxLayout(settingsWidget);
+    QVBoxLayout* settingsLayout = createVBoxLayout(settingsWidget, 5, 5);
     
-    // 基本设置组
+    // 基本设置组 - 紧凑布局
     QGroupBox* basicGroup = createGroupBox("基本设置");
-    QVBoxLayout* basicLayout = createVBoxLayout(basicGroup, 10, 8);
+    QGridLayout* basicGridLayout = new QGridLayout(basicGroup);
+    basicGridLayout->setSpacing(8);
+    basicGridLayout->setContentsMargins(10, 15, 10, 10);
     
-    // 文本输入
-    basicLayout->addWidget(createLabel("输入文本:"));
+    // 文本输入 - 占用整行
+    basicGridLayout->addWidget(createLabel("输入文本:"), 0, 0, 1, 2);
     m_textInput = new QLineEdit();
     m_textInput->setPlaceholderText("请输入文本（支持中文、英文、数字、网址等）...");
-    basicLayout->addWidget(m_textInput);
+    basicGridLayout->addWidget(m_textInput, 1, 0, 1, 2);
     
-    // 格式选择
-    basicLayout->addWidget(createLabel("条码格式:"));
+    // 格式选择和错误纠正级别 - 并排放置
+    basicGridLayout->addWidget(createLabel("条码格式:"), 2, 0);
+    basicGridLayout->addWidget(createLabel("纠错级别:"), 2, 1);
+    
     m_formatCombo = new QComboBox();
     m_formatCombo->addItems({
-        "QR Code - 二维码 (支持汉字、网址、文本)",
-        "Data Matrix - 数据矩阵 (高密度存储)",
-        "PDF417 - PDF417码 (大容量文档)",
-        "Aztec - 阿兹特克码 (高效二维)",
-        "Code 128 - 一维条码 (字母数字)",
-        "Code 39 - 一维条码 (大写字母数字)",
-        "Code 93 - 一维条码 (ASCII字符)",
-        "Codabar - 库德巴码 (数字应用)",
-        "EAN-8 - 欧洲商品码 (8位数字)",
-        "EAN-13 - 欧洲商品码 (13位数字)",
-        "UPC-A - 美国商品码 (12位数字)",
-        "UPC-E - 美国商品码 (缩短版)",
-        "ITF - 交错25码 (偶数位数字)"
+        "QR Code - 二维码",
+        "Data Matrix - 数据矩阵", 
+        "PDF417 - PDF417码",
+        "Aztec - 阿兹特克码",
+        "Code 128 - 一维条码",
+        "Code 39 - 一维条码",
+        "Code 93 - 一维条码",
+        "Codabar - 库德巴码",
+        "EAN-8 - 欧洲商品码",
+        "EAN-13 - 欧洲商品码", 
+        "UPC-A - 美国商品码",
+        "UPC-E - 美国商品码",
+        "ITF - 交错25码"
     });
-    m_formatCombo->setToolTip("选择要生成的条码格式\n"
-                              "• 二维码格式可存储更多数据\n"
-                              "• 一维条码适用于商品标识\n"
-                              "• 不同格式有不同的数据容量和应用场景");
-    basicLayout->addWidget(m_formatCombo);
+    m_formatCombo->setToolTip("选择要生成的条码格式");
+    basicGridLayout->addWidget(m_formatCombo, 3, 0);
     
-    // 格式说明标签
-    m_formatInfoLabel = new QLabel();
-    m_formatInfoLabel->setWordWrap(true);
-    m_formatInfoLabel->setStyleSheet("QLabel { "
-                                    "background-color: #f0f8ff; "
-                                    "border: 1px solid #ccc; "
-                                    "border-radius: 5px; "
-                                    "padding: 8px; "
-                                    "margin: 5px 0; "
-                                    "font-size: 12px; "
-                                    "color: #333; "
-                                    "}");
-    m_formatInfoLabel->setMaximumHeight(120);
-    basicLayout->addWidget(m_formatInfoLabel);
-    
-    // 错误纠正级别
-    basicLayout->addWidget(createLabel("错误纠正级别:"));
     m_errorCorrectionCombo = new QComboBox();
     m_errorCorrectionCombo->addItems({"低 (L)", "中 (M)", "高 (Q)", "最高 (H)"});
-    m_errorCorrectionCombo->setCurrentIndex(1); // 默认选择中等
-    basicLayout->addWidget(m_errorCorrectionCombo);
+    m_errorCorrectionCombo->setCurrentIndex(1);
+    basicGridLayout->addWidget(m_errorCorrectionCombo, 3, 1);
     
-    // 尺寸设置
-    QHBoxLayout* sizeLayout = createHBoxLayout(nullptr, 0);
-    sizeLayout->addWidget(createLabel("尺寸:"));
+    // 尺寸设置 - 紧凑显示
+    basicGridLayout->addWidget(createLabel("尺寸:"), 4, 0);
     m_sizeSpinBox = new QSpinBox();
     m_sizeSpinBox->setRange(100, 1000);
     m_sizeSpinBox->setValue(300);
     m_sizeSpinBox->setSuffix(" px");
-    sizeLayout->addWidget(m_sizeSpinBox);
-    sizeLayout->addStretch();
-    basicLayout->addLayout(sizeLayout);
+    basicGridLayout->addWidget(m_sizeSpinBox, 4, 1);
+    
+    // 格式说明标签 - 使用滚动区域支持长文本
+    m_formatInfoScrollArea = new QScrollArea();
+    m_formatInfoScrollArea->setWidgetResizable(true);
+    m_formatInfoScrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_formatInfoScrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    m_formatInfoScrollArea->setFrameShape(QFrame::StyledPanel);
+    m_formatInfoScrollArea->setMaximumHeight(120);  // 增加最大高度
+    m_formatInfoScrollArea->setMinimumHeight(60);   // 设置最小高度
+    
+    m_formatInfoLabel = new QLabel();
+    m_formatInfoLabel->setWordWrap(true);
+    m_formatInfoLabel->setAlignment(Qt::AlignTop);
+    m_formatInfoLabel->setStyleSheet("QLabel { "
+                                    "background-color: transparent; "
+                                    "border: none; "
+                                    "padding: 8px; "
+                                    "font-size: 11px; "
+                                    "color: #333; "
+                                    "}");
+    
+    // 设置滚动区域的样式
+    m_formatInfoScrollArea->setStyleSheet("QScrollArea { "
+                                         "background-color: #f0f8ff; "
+                                         "border: 1px solid #ccc; "
+                                         "border-radius: 5px; "
+                                         "margin: 3px 0; "
+                                         "} "
+                                         "QScrollBar:vertical { "
+                                         "background: #f0f0f0; "
+                                         "width: 12px; "
+                                         "border-radius: 6px; "
+                                         "} "
+                                         "QScrollBar::handle:vertical { "
+                                         "background: #c0c0c0; "
+                                         "border-radius: 6px; "
+                                         "min-height: 20px; "
+                                         "} "
+                                         "QScrollBar::handle:vertical:hover { "
+                                         "background: #a0a0a0; "
+                                         "}");
+    
+    m_formatInfoScrollArea->setWidget(m_formatInfoLabel);
+    basicGridLayout->addWidget(m_formatInfoScrollArea, 5, 0, 1, 2);
     
     settingsLayout->addWidget(basicGroup);
     
-    // Logo设置组
-    QGroupBox* logoGroup = createGroupBox("Logo设置");
-    QVBoxLayout* logoLayout = createVBoxLayout(logoGroup, 10, 8);
+    // Logo和文本设置组 - 合并为一个可折叠的组
+    QGroupBox* advancedGroup = createGroupBox("高级设置");
+    QGridLayout* advancedGridLayout = new QGridLayout(advancedGroup);
+    advancedGridLayout->setSpacing(6);
+    advancedGridLayout->setContentsMargins(10, 15, 10, 10);
+    
+    // Logo设置 - 左侧
+    QLabel* logoSectionLabel = createLabel("Logo设置:");
+    logoSectionLabel->setStyleSheet("font-weight: bold; color: #444;");
+    advancedGridLayout->addWidget(logoSectionLabel, 0, 0, 1, 2);
     
     m_embedLogoCheckBox = new QCheckBox("嵌入Logo");
     m_embedLogoCheckBox->setEnabled(false);
-    logoLayout->addWidget(m_embedLogoCheckBox);
+    advancedGridLayout->addWidget(m_embedLogoCheckBox, 1, 0);
     
-    m_selectLogoButton = new QPushButton("选择Logo图片");
-    logoLayout->addWidget(m_selectLogoButton);
+    m_selectLogoButton = new QPushButton("选择Logo");
+    m_selectLogoButton->setMaximumWidth(100);
+    advancedGridLayout->addWidget(m_selectLogoButton, 1, 1);
     
     m_logoPreviewLabel = new QLabel();
-    m_logoPreviewLabel->setFixedSize(80, 80);
+    m_logoPreviewLabel->setFixedSize(60, 60);
     m_logoPreviewLabel->setAlignment(Qt::AlignCenter);
     m_logoPreviewLabel->setStyleSheet(
         "border: 1px solid #cccccc; border-radius: 4px; background-color: #f5f5f5;"
     );
     m_logoPreviewLabel->setText("无Logo");
-    logoLayout->addWidget(m_logoPreviewLabel);
+    advancedGridLayout->addWidget(m_logoPreviewLabel, 2, 0);
     
-    QHBoxLayout* logoSizeLayout = createHBoxLayout(nullptr, 0);
+    // Logo大小控制
+    QWidget* logoSizeWidget = new QWidget();
+    QVBoxLayout* logoSizeLayout = new QVBoxLayout(logoSizeWidget);
+    logoSizeLayout->setContentsMargins(0, 0, 0, 0);
+    logoSizeLayout->setSpacing(2);
+    
     logoSizeLayout->addWidget(createLabel("Logo大小:"));
     m_logoSizeSlider = new QSlider(Qt::Horizontal);
     m_logoSizeSlider->setRange(10, 30);
@@ -402,73 +460,77 @@ void GeneratorWidget::setupUI()
     m_logoSizeSlider->setEnabled(false);
     logoSizeLayout->addWidget(m_logoSizeSlider);
     m_logoSizeLabel = createLabel("20%");
-    m_logoSizeLabel->setMinimumWidth(30);
+    m_logoSizeLabel->setAlignment(Qt::AlignCenter);
     logoSizeLayout->addWidget(m_logoSizeLabel);
-    logoLayout->addLayout(logoSizeLayout);
     
-    settingsLayout->addWidget(logoGroup);
+    advancedGridLayout->addWidget(logoSizeWidget, 2, 1);
     
-    // 自定义文本设置组
-    QGroupBox* textGroup = createGroupBox("自定义文本");
-    QVBoxLayout* textLayout = createVBoxLayout(textGroup, 10, 8);
+    // 分隔线
+    QFrame* separatorLine = new QFrame();
+    separatorLine->setFrameShape(QFrame::HLine);
+    separatorLine->setFrameShadow(QFrame::Sunken);
+    separatorLine->setStyleSheet("color: #cccccc;");
+    advancedGridLayout->addWidget(separatorLine, 3, 0, 1, 2);
+    
+    // 自定义文本设置 - 右侧
+    QLabel* textSectionLabel = createLabel("自定义文本:");
+    textSectionLabel->setStyleSheet("font-weight: bold; color: #444;");
+    advancedGridLayout->addWidget(textSectionLabel, 4, 0, 1, 2);
     
     m_customTextCheckBox = new QCheckBox("添加自定义文本");
-    textLayout->addWidget(m_customTextCheckBox);
+    advancedGridLayout->addWidget(m_customTextCheckBox, 5, 0, 1, 2);
     
-    textLayout->addWidget(createLabel("文本内容:"));
+    advancedGridLayout->addWidget(createLabel("文本内容:"), 6, 0);
     m_customTextInput = new QLineEdit();
-    m_customTextInput->setPlaceholderText("请输入要显示的文本（支持中文）...");
+    m_customTextInput->setPlaceholderText("请输入要显示的文本...");
     m_customTextInput->setEnabled(false);
-    textLayout->addWidget(m_customTextInput);
+    advancedGridLayout->addWidget(m_customTextInput, 6, 1);
     
-    // 文本位置
-    QHBoxLayout* positionLayout = createHBoxLayout(nullptr, 0);
-    positionLayout->addWidget(createLabel("文本位置:"));
+    // 文本属性 - 紧凑布局
+    advancedGridLayout->addWidget(createLabel("位置:"), 7, 0);
     m_textPositionCombo = new QComboBox();
     m_textPositionCombo->addItems({"底部", "顶部", "左侧", "右侧"});
     m_textPositionCombo->setEnabled(false);
-    positionLayout->addWidget(m_textPositionCombo);
-    textLayout->addLayout(positionLayout);
+    advancedGridLayout->addWidget(m_textPositionCombo, 7, 1);
     
-    // 字体大小
-    QHBoxLayout* textSizeLayout = createHBoxLayout(nullptr, 0);
-    textSizeLayout->addWidget(createLabel("字体大小:"));
+    advancedGridLayout->addWidget(createLabel("大小:"), 8, 0);
     m_textSizeSpinBox = new QSpinBox();
     m_textSizeSpinBox->setRange(8, 48);
     m_textSizeSpinBox->setValue(12);
     m_textSizeSpinBox->setSuffix(" px");
     m_textSizeSpinBox->setEnabled(false);
-    textSizeLayout->addWidget(m_textSizeSpinBox);
-    textSizeLayout->addStretch();
-    textLayout->addLayout(textSizeLayout);
+    advancedGridLayout->addWidget(m_textSizeSpinBox, 8, 1);
     
-    // 文本颜色
-    QHBoxLayout* colorLayout = createHBoxLayout(nullptr, 0);
-    colorLayout->addWidget(createLabel("文本颜色:"));
+    advancedGridLayout->addWidget(createLabel("颜色:"), 9, 0);
     m_textColorCombo = new QComboBox();
     m_textColorCombo->addItems({"黑色", "白色", "红色", "蓝色", "绿色", "灰色"});
     m_textColorCombo->setEnabled(false);
-    colorLayout->addWidget(m_textColorCombo);
-    colorLayout->addStretch();
-    textLayout->addLayout(colorLayout);
+    advancedGridLayout->addWidget(m_textColorCombo, 9, 1);
     
-    settingsLayout->addWidget(textGroup);
+    settingsLayout->addWidget(advancedGroup);
     
-    // 自动生成选项
+    // 自动生成选项和操作按钮
+    QWidget* controlWidget = new QWidget();
+    QVBoxLayout* controlLayout = createVBoxLayout(controlWidget, 5, 5);
+    
     m_autoGenerateCheckBox = new QCheckBox("自动生成预览");
     m_autoGenerateCheckBox->setChecked(true);
-    settingsLayout->addWidget(m_autoGenerateCheckBox);
+    controlLayout->addWidget(m_autoGenerateCheckBox);
     
-    // 操作按钮
-    QHBoxLayout* buttonLayout = createHBoxLayout(nullptr, 0);
+    // 操作按钮 - 水平排列
+    QHBoxLayout* buttonLayout = createHBoxLayout(nullptr, 0, 8);
     m_generateButton = createButton("生成二维码");
     m_saveButton = createButton("保存图片");
     m_saveButton->setEnabled(false);
     buttonLayout->addWidget(m_generateButton);
     buttonLayout->addWidget(m_saveButton);
-    settingsLayout->addLayout(buttonLayout);
+    controlLayout->addLayout(buttonLayout);
     
+    settingsLayout->addWidget(controlWidget);
     settingsLayout->addStretch();
+    
+    // 将设置区域放入滚动区域
+    scrollArea->setWidget(settingsWidget);
     
     // 右侧：预览区域
     QWidget* previewWidget = new QWidget();
@@ -478,6 +540,7 @@ void GeneratorWidget::setupUI()
     m_qrCodeLabel = new QLabel();
     m_qrCodeLabel->setAlignment(Qt::AlignCenter);
     m_qrCodeLabel->setText("请输入文本并点击生成按钮");
+    m_qrCodeLabel->setMinimumHeight(300);
     previewLayout->addWidget(m_qrCodeLabel);
     
     m_statusLabel = createLabel("准备就绪");
@@ -485,10 +548,20 @@ void GeneratorWidget::setupUI()
     previewLayout->addWidget(m_statusLabel);
     
     // 添加到主布局
-    mainLayout->addWidget(settingsWidget, 0, 0);
+    mainLayout->addWidget(scrollArea, 0, 0);
     mainLayout->addWidget(previewWidget, 0, 1);
-    mainLayout->setColumnStretch(1, 1);
+    mainLayout->setColumnStretch(0, 0);  // 左侧固定宽度
+    mainLayout->setColumnStretch(1, 1);  // 右侧可伸缩
     
+    // 连接信号槽
+    connectSignals();
+    
+    // 更新格式信息
+    updateFormatInfo();
+}
+
+void GeneratorWidget::connectSignals()
+{
     // 连接信号
     connect(m_generateButton, &QPushButton::clicked, this, &GeneratorWidget::onGenerateClicked);
     connect(m_saveButton, &QPushButton::clicked, this, &GeneratorWidget::onSaveClicked);
@@ -508,9 +581,16 @@ void GeneratorWidget::setupUI()
     connect(m_textColorCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &GeneratorWidget::onCustomTextChanged);
     
+    // 自动生成相关
+    connect(m_textInput, &QLineEdit::textChanged, this, &GeneratorWidget::onAutoGenerate);
+    connect(m_sizeSpinBox, QOverload<int>::of(&QSpinBox::valueChanged), this, &GeneratorWidget::onAutoGenerate);
+    connect(m_errorCorrectionCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &GeneratorWidget::onAutoGenerate);
+}
+
+void GeneratorWidget::updateFormatInfo()
+{
     // 初始化格式说明
     onFormatChanged();
-    
     updateLogoControls();
 }
 
@@ -542,6 +622,9 @@ void GeneratorWidget::onFormatChanged()
     // 显示格式详细说明
     QString description = m_generator->getFormatDescription(config.format);
     m_formatInfoLabel->setText(description);
+    
+    // 延迟调整格式说明区域高度，确保布局完成
+    QTimer::singleShot(0, this, &GeneratorWidget::adjustFormatInfoHeight);
     
     // 根据格式是否支持错误纠正来启用/禁用错误纠正选项
     bool supportsECC = m_generator->supportsErrorCorrection(config.format);
@@ -576,4 +659,59 @@ void GeneratorWidget::onCustomTextChanged()
     if (m_autoGenerateCheckBox->isChecked() && m_customTextCheckBox->isChecked()) {
         onGenerateClicked();
     }
+}
+
+void GeneratorWidget::onAutoGenerate()
+{
+    // 自动生成预览
+    if (m_autoGenerateCheckBox->isChecked() && !m_textInput->text().isEmpty()) {
+        onGenerateClicked();
+    }
+}
+
+void GeneratorWidget::adjustFormatInfoHeight()
+{
+    if (!m_formatInfoLabel || !m_formatInfoScrollArea) {
+        return;
+    }
+    
+    // 确保标签已经完成布局
+    m_formatInfoLabel->adjustSize();
+    
+    // 获取当前滚动区域的内容宽度（减去边框和可能的滚动条）
+    int contentWidth = m_formatInfoScrollArea->viewport()->width() - 16; // 减去padding
+    if (contentWidth <= 0) {
+        contentWidth = m_formatInfoScrollArea->width() - 20; // 预估宽度
+    }
+    
+    // 计算文本所需的高度
+    QFontMetrics fontMetrics(m_formatInfoLabel->font());
+    QRect textRect = fontMetrics.boundingRect(
+        QRect(0, 0, contentWidth, 0),
+        Qt::TextWordWrap,
+        m_formatInfoLabel->text()
+    );
+    
+    // 计算所需高度（加上padding和边距）
+    int requiredHeight = textRect.height() + 20; // padding + margin
+    
+    // 设置合理的高度范围
+    int minHeight = 60;
+    int maxHeight = 150; // 增加最大高度
+    int targetHeight = qBound(minHeight, requiredHeight, maxHeight);
+    
+    // 根据内容调整滚动条策略
+    if (requiredHeight <= maxHeight) {
+        // 内容能完全显示，不需要滚动条
+        m_formatInfoScrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        targetHeight = qMax(minHeight, requiredHeight);
+    } else {
+        // 内容太多，需要滚动条
+        m_formatInfoScrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+        targetHeight = maxHeight;
+    }
+    
+    // 应用新高度
+    m_formatInfoScrollArea->setMinimumHeight(targetHeight);
+    m_formatInfoScrollArea->setMaximumHeight(targetHeight);
 }

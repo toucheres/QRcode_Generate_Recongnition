@@ -83,6 +83,12 @@ private:
     void loadImageFromFile(const QString& filePath);
     void processImageList(const QStringList& filePaths);
     void applyDefaultStyles() override;
+    
+    // 主题相关辅助方法
+    QString getStatusTextColor() const;
+    QString getSuccessColor() const;
+    QString getErrorColor() const;
+    QString getWarningColor() const;
 
 private:
     // Core components

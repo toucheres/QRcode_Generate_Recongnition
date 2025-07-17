@@ -6,6 +6,7 @@
 #include <QFileDialog>
 #include <QMessageBox>
 #include <QMimeData>
+#include <QPalette>
 #include <QTextStream>
 #include <QUrl>
 
@@ -92,9 +93,11 @@ void RecognizerWidget::showMultiFormatResults(
     }
 
     QString timestamp = QDateTime::currentDateTime().toString("hh:mm:ss");
-    m_resultsTextEdit->append(QString("[%1] <span style='color: green;'>识别到 %2 种格式：</span>")
+    
+    m_resultsTextEdit->append(QString("[%1] <span style='color: %3;'>识别到 %2 种格式：</span>")
                                   .arg(timestamp)
-                                  .arg(results.size()));
+                                  .arg(results.size())
+                                  .arg(getSuccessColor()));
 
     // 按流行度显示所有识别结果
     for (int i = 0; i < results.size(); ++i)
@@ -311,6 +314,10 @@ void RecognizerWidget::setupUI()
 {
     setWindowTitle("二维码识别器");
 
+    // 检测系统主题（在函数开头统一检测）
+    QPalette palette = QApplication::palette();
+    bool isDarkTheme = palette.color(QPalette::Window).lightness() < 128;
+
     QHBoxLayout* mainLayout = new QHBoxLayout(this);
     mainLayout->setSpacing(15);
 
@@ -326,13 +333,19 @@ void RecognizerWidget::setupUI()
     m_imageLabel->setAlignment(Qt::AlignCenter);
     m_imageLabel->setText("拖放图片到此处或点击按钮选择图片");
     m_imageLabel->setMinimumSize(300, 300);
-    m_imageLabel->setStyleSheet("QLabel {"
-                                "    border: 2px dashed #aaaaaa;"
+    
+    // 使用统一的主题检测结果设置图片标签样式
+    QString borderColor = isDarkTheme ? "#666666" : "#aaaaaa";
+    QString backgroundColor = isDarkTheme ? "#3c3c3c" : "#f5f5f5";
+    QString textColor = isDarkTheme ? "#cccccc" : "#666666";
+    
+    m_imageLabel->setStyleSheet(QString("QLabel {"
+                                "    border: 2px dashed %1;"
                                 "    border-radius: 8px;"
-                                "    background-color: #f5f5f5;"
-                                "    color: #666666;"
+                                "    background-color: %2;"
+                                "    color: %3;"
                                 "    font-size: 14px;"
-                                "}");
+                                "}").arg(borderColor, backgroundColor, textColor));
     m_imageScrollArea->setWidget(m_imageLabel);
     m_imageScrollArea->setWidgetResizable(true);
     imageLayout->addWidget(m_imageScrollArea);
@@ -348,11 +361,8 @@ void RecognizerWidget::setupUI()
     // 设置按钮样式和提示
     m_recognizeButton->setToolTip("识别二维码格式");
     m_multiFormatButton->setToolTip("识别所有支持的条码格式，按流行度排序显示");
-    m_multiFormatButton->setStyleSheet("QPushButton {"
-                                       "background-color: #4CAF50;"
-                                       "color: white;"
-                                       "font-weight: bold;"
-                                       "}");
+    // 移除硬编码样式，让BaseWidget处理主题
+    // m_multiFormatButton 使用默认样式
 
     buttonLayout->addWidget(m_selectImageButton);
     buttonLayout->addWidget(m_recognizeButton);
@@ -374,14 +384,11 @@ void RecognizerWidget::setupUI()
     QHBoxLayout* urlButtonLayout = createHBoxLayout(nullptr, 0);
     m_loadFromUrlButton = createButton("加载并识别");
     m_loadFromUrlButton->setEnabled(false);
-    m_loadFromUrlButton->setStyleSheet("QPushButton {"
-                                       "background-color: #2196F3;"
-                                       "color: white;"
-                                       "font-weight: bold;"
-                                       "}");
+    // 移除硬编码样式，让BaseWidget处理主题
 
     m_urlStatusLabel = new QLabel();
-    m_urlStatusLabel->setStyleSheet("QLabel { color: #666; font-size: 12px; }");
+    // 使用主题相关的颜色设置状态标签样式
+    m_urlStatusLabel->setStyleSheet(QString("QLabel { color: %1; font-size: 12px; }").arg(getStatusTextColor()));
 
     urlButtonLayout->addWidget(m_loadFromUrlButton);
     urlButtonLayout->addStretch();
@@ -440,7 +447,7 @@ void RecognizerWidget::setupUI()
 
     // 状态栏
     m_statusLabel = createLabel("准备就绪");
-    m_statusLabel->setStyleSheet("color: #666666; font-size: 8pt;");
+    m_statusLabel->setStyleSheet(QString("color: %1; font-size: 8pt;").arg(getStatusTextColor()));
     m_progressBar = new QProgressBar();
     m_progressBar->setVisible(false);
     rightLayout->addWidget(m_statusLabel);
@@ -509,8 +516,16 @@ void RecognizerWidget::updateResultDisplay(const QRCodeRecognizer::RecognitionRe
     m_results.append(result);
 
     QString timestamp = QDateTime::currentDateTime().toString("hh:mm:ss");
+    
+    // 检测系统主题以调整HTML样式
+    QPalette palette = QApplication::palette();
+    bool isDarkTheme = palette.color(QPalette::Window).lightness() < 128;
+    
+    QString bgColor = isDarkTheme ? "#404040" : "#f0f0f0";
+    QString textColor = isDarkTheme ? "#ffffff" : "#000000";
+    
     QString resultHtml = QString("<div style='margin: 5px 0; padding: 8px; background-color: "
-                                 "#f0f0f0; border-radius: 4px;'>"
+                                 "%5; border-radius: 4px; color: %6;'>"
                                  "<b>[%1]</b> 识别成功<br/>"
                                  "<b>内容:</b> %2<br/>"
                                  "<b>格式:</b> %3<br/>"
@@ -519,7 +534,8 @@ void RecognizerWidget::updateResultDisplay(const QRCodeRecognizer::RecognitionRe
                              .arg(timestamp)
                              .arg(result.text.toHtmlEscaped())
                              .arg(result.format)
-                             .arg(QString::number(result.confidence, 'f', 2));
+                             .arg(QString::number(result.confidence, 'f', 2))
+                             .arg(bgColor, textColor);
 
     m_resultsTextEdit->append(resultHtml);
 
@@ -598,9 +614,16 @@ void RecognizerWidget::applyDefaultStyles()
 {
     BaseWidget::applyDefaultStyles();
 
+    // 检测系统主题
+    QPalette palette = QApplication::palette();
+    bool isDarkTheme = palette.color(QPalette::Window).lightness() < 128;
+    
+    QString borderColor = isDarkTheme ? "#555555" : "#cccccc";
+
     // 应用特定样式
-    setStyleSheet(styleSheet() + "QScrollArea { border: 1px solid #cccccc; border-radius: 4px; }"
-                                 "QTextEdit { border: 1px solid #cccccc; border-radius: 4px; }");
+    setStyleSheet(styleSheet() + QString("QScrollArea { border: 1px solid %1; border-radius: 4px; }"
+                                        "QTextEdit { border: 1px solid %1; border-radius: 4px; }")
+                                        .arg(borderColor));
 }
 
 void RecognizerWidget::onLoadFromUrlClicked()
@@ -662,7 +685,7 @@ void RecognizerWidget::onUrlInputChanged()
     {
         m_loadFromUrlButton->setEnabled(false);
         m_urlStatusLabel->setText("❌ 无效的URL格式");
-        m_urlStatusLabel->setStyleSheet("QLabel { color: #f44336; font-size: 12px; }");
+        m_urlStatusLabel->setStyleSheet(QString("QLabel { color: %1; font-size: 12px; }").arg(getErrorColor()));
         return;
     }
 
@@ -671,7 +694,7 @@ void RecognizerWidget::onUrlInputChanged()
     {
         m_loadFromUrlButton->setEnabled(false);
         m_urlStatusLabel->setText("❌ 仅支持HTTP/HTTPS协议");
-        m_urlStatusLabel->setStyleSheet("QLabel { color: #f44336; font-size: 12px; }");
+        m_urlStatusLabel->setStyleSheet(QString("QLabel { color: %1; font-size: 12px; }").arg(getErrorColor()));
         return;
     }
 
@@ -692,12 +715,12 @@ void RecognizerWidget::onUrlInputChanged()
     if (hasImageExt)
     {
         m_urlStatusLabel->setText("✅ URL格式正确");
-        m_urlStatusLabel->setStyleSheet("QLabel { color: #4CAF50; font-size: 12px; }");
+        m_urlStatusLabel->setStyleSheet(QString("QLabel { color: %1; font-size: 12px; }").arg(getSuccessColor()));
     }
     else
     {
         m_urlStatusLabel->setText("⚠️ URL格式正确，但可能不是图片");
-        m_urlStatusLabel->setStyleSheet("QLabel { color: #FF9800; font-size: 12px; }");
+        m_urlStatusLabel->setStyleSheet(QString("QLabel { color: %1; font-size: 12px; }").arg(getWarningColor()));
     }
 }
 
@@ -713,7 +736,7 @@ void RecognizerWidget::onNetworkImageDownloaded()
     if (m_currentReply->error() != QNetworkReply::NoError)
     {
         m_urlStatusLabel->setText("❌ 下载失败");
-        m_urlStatusLabel->setStyleSheet("QLabel { color: #f44336; font-size: 12px; }");
+        m_urlStatusLabel->setStyleSheet(QString("QLabel { color: %1; font-size: 12px; }").arg(getErrorColor()));
         showError(QString("网络错误: %1").arg(m_currentReply->errorString()));
         m_currentReply->deleteLater();
         m_currentReply = nullptr;
@@ -727,7 +750,7 @@ void RecognizerWidget::onNetworkImageDownloaded()
     if (!image.loadFromData(imageData))
     {
         m_urlStatusLabel->setText("❌ 不是有效的图片");
-        m_urlStatusLabel->setStyleSheet("QLabel { color: #f44336; font-size: 12px; }");
+        m_urlStatusLabel->setStyleSheet(QString("QLabel { color: %1; font-size: 12px; }").arg(getErrorColor()));
         showError("下载的文件不是有效的图片格式");
         m_currentReply->deleteLater();
         m_currentReply = nullptr;
@@ -736,7 +759,7 @@ void RecognizerWidget::onNetworkImageDownloaded()
 
     // 成功加载图片
     m_urlStatusLabel->setText("✅ 图片加载成功");
-    m_urlStatusLabel->setStyleSheet("QLabel { color: #4CAF50; font-size: 12px; }");
+    m_urlStatusLabel->setStyleSheet(QString("QLabel { color: %1; font-size: 12px; }").arg(getSuccessColor()));
 
     // 更新图片预览
     m_currentImage = image;
@@ -779,7 +802,7 @@ void RecognizerWidget::onNetworkError(QNetworkReply::NetworkError error)
     m_loadFromUrlButton->setEnabled(true);
     m_progressBar->setVisible(false);
     m_urlStatusLabel->setText("❌ 网络错误");
-    m_urlStatusLabel->setStyleSheet("QLabel { color: #f44336; font-size: 12px; }");
+    m_urlStatusLabel->setStyleSheet(QString("QLabel { color: %1; font-size: 12px; }").arg(getErrorColor()));
 
     QString errorMessage;
     switch (error)
@@ -822,4 +845,25 @@ void RecognizerWidget::onDownloadProgress(qint64 bytesReceived, qint64 bytesTota
     {
         m_urlStatusLabel->setText(QString("已下载 %1 字节").arg(bytesReceived));
     }
+}
+
+// 主题相关颜色方法
+QString RecognizerWidget::getStatusTextColor() const
+{
+    return isDarkTheme() ? "#cccccc" : "#666666";
+}
+
+QString RecognizerWidget::getSuccessColor() const
+{
+    return isDarkTheme() ? "#81C784" : "#4CAF50";  // 深色主题使用更亮的绿色
+}
+
+QString RecognizerWidget::getErrorColor() const
+{
+    return isDarkTheme() ? "#E57373" : "#f44336";  // 深色主题使用更亮的红色
+}
+
+QString RecognizerWidget::getWarningColor() const
+{
+    return isDarkTheme() ? "#FFB74D" : "#FF9800";  // 深色主题使用更亮的橙色
 }

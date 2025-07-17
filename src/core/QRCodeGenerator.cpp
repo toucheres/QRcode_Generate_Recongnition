@@ -609,6 +609,7 @@ std::string QRCodeGenerator::prepareTextForFormat(ZXing::BarcodeFormat format, c
             
         case ZXing::BarcodeFormat::Code128:
         case ZXing::BarcodeFormat::Code93:
+        case ZXing::BarcodeFormat::PDF417:
             // 这些格式支持ASCII但不支持UTF-8
             return text.toLatin1().toStdString();
             

@@ -56,6 +56,9 @@ private slots:
     // 摄像头相关
     void onQRCodeDetected(const QString& text);
     void onCameraError(const QString& error);
+    
+    // 主题相关
+    void onThemeChanged(bool isDark);
 
 private:
     void setupUI();
@@ -63,6 +66,7 @@ private:
     void setupStatusBar();
     void setupConnections();
     void updateWindowTitle(const QString& subtitle = QString());
+    void applyThemeStyles();
     
     // 文件操作
     bool saveQRCodeToFile(const QPixmap& pixmap);

@@ -9,6 +9,7 @@
 #include <QSlider>
 #include <QPushButton>
 #include <QLabel>
+#include <QScrollArea>
 
 /**
  * @class GeneratorWidget
@@ -68,6 +69,7 @@ private slots:
     void onFormatChanged(); // 格式变化槽函数
     void onCustomTextToggled(bool enabled); // 自定义文本切换
     void onCustomTextChanged(); // 自定义文本内容变化
+    void onAutoGenerate(); // 自动生成槽函数
 
 protected:
     void applyDefaultStyles() override;
@@ -76,6 +78,9 @@ private:
     void setupUI();
     void updateLogoPreview();
     void updateLogoControls();
+    void connectSignals();     // 连接信号槽
+    void updateFormatInfo();   // 更新格式信息
+    void adjustFormatInfoHeight(); // 调整格式说明区域高度
 
 private:
     // 输入控件
@@ -108,7 +113,8 @@ private:
     // 显示控件
     QLabel* m_qrCodeLabel;
     QLabel* m_statusLabel;
-    QLabel* m_formatInfoLabel;  // 格式说明标签
+    QScrollArea* m_formatInfoScrollArea;  // 格式说明滚动区域
+    QLabel* m_formatInfoLabel;            // 格式说明标签
     
     // 数据
     QPixmap m_logoPixmap;

@@ -2,9 +2,11 @@
 #include "gui/GeneratorWidget.h"
 #include "gui/RecognizerWidget.h"
 #include "gui/CameraWidget.h"
+#include "gui/SettingsDialog.h"
 #include "core/QRCodeGenerator.h"
 #include "core/QRCodeRecognizer.h"
 #include "utils/AppUtils.h"
+#include "utils/ThemeManager.h"
 
 #include <QApplication>
 #include <QMenuBar>
@@ -18,6 +20,7 @@
 #include <QSettings>
 #include <QSplitter>
 #include <QLabel>
+#include <QPalette>
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
@@ -29,12 +32,19 @@ MainWindow::MainWindow(QWidget* parent)
     , m_recognizer(new QRCodeRecognizer(this))
     , m_hasUnsavedChanges(false)
 {
+    // 初始化主题管理器
+    ThemeManager::instance()->loadSettings();
+    
     setupUI();
     setupMenuBar();
     setupStatusBar();
     setupConnections();
     loadSettings();
     updateWindowTitle();
+    
+    // 连接主题变化信号
+    connect(ThemeManager::instance(), &ThemeManager::themeChanged,
+            this, &MainWindow::onThemeChanged);
 }
 
 MainWindow::~MainWindow()
@@ -159,8 +169,8 @@ void MainWindow::onAbout()
 
 void MainWindow::onSettings()
 {
-    // 这里可以实现设置对话框
-    QMessageBox::information(this, "设置", "设置功能将在后续版本中实现");
+    SettingsDialog dialog(this);
+    dialog.exec();
 }
 
 void MainWindow::onGenerateQRCode()
@@ -265,30 +275,88 @@ void MainWindow::setupUI()
     
     mainLayout->addWidget(m_tabWidget);
     
+    // 应用主题样式
+    applyThemeStyles();
+}
+
+void MainWindow::applyThemeStyles()
+{
+    // 使用主题管理器检测主题
+    bool isDarkTheme = ThemeManager::instance()->isDarkTheme();
+    
+    // 根据主题设置颜色
+    QString mainBgColor = isDarkTheme ? "#2b2b2b" : "#f0f0f0";
+    QString tabPaneBgColor = isDarkTheme ? "#1e1e1e" : "#ffffff";
+    QString tabBgColor = isDarkTheme ? "#3c3c3c" : "#e0e0e0";
+    QString tabSelectedBgColor = isDarkTheme ? "#1e1e1e" : "#ffffff";
+    QString tabHoverBgColor = isDarkTheme ? "#404040" : "#f0f0f0";
+    QString borderColor = isDarkTheme ? "#555555" : "#cccccc";
+    QString textColor = isDarkTheme ? "#ffffff" : "#000000";
+    
     // 设置样式
     setStyleSheet(
-        "QMainWindow {"
-        "    background-color: #f0f0f0;"
+        QString("QMainWindow {"
+        "    background-color: %1;"
+        "    color: %6;"
         "}"
         "QTabWidget::pane {"
-        "    border: 1px solid #cccccc;"
-        "    background-color: white;"
+        "    border: 1px solid %5;"
+        "    background-color: %2;"
         "}"
         "QTabBar::tab {"
-        "    background-color: #e0e0e0;"
+        "    background-color: %3;"
+        "    color: %6;"
         "    padding: 8px 16px;"
         "    margin-right: 2px;"
         "    border-top-left-radius: 4px;"
         "    border-top-right-radius: 4px;"
+        "    border: 1px solid %5;"
+        "    border-bottom: none;"
         "}"
         "QTabBar::tab:selected {"
-        "    background-color: white;"
-        "    border-bottom: 1px solid white;"
+        "    background-color: %4;"
+        "    border-bottom: 1px solid %4;"
         "}"
         "QTabBar::tab:hover {"
-        "    background-color: #f0f0f0;"
+        "    background-color: %7;"
         "}"
+        "QMenuBar {"
+        "    background-color: %1;"
+        "    color: %6;"
+        "    border-bottom: 1px solid %5;"
+        "}"
+        "QMenuBar::item {"
+        "    background-color: transparent;"
+        "    padding: 4px 8px;"
+        "}"
+        "QMenuBar::item:selected {"
+        "    background-color: %7;"
+        "}"
+        "QMenu {"
+        "    background-color: %2;"
+        "    color: %6;"
+        "    border: 1px solid %5;"
+        "}"
+        "QMenu::item {"
+        "    padding: 4px 20px;"
+        "}"
+        "QMenu::item:selected {"
+        "    background-color: %7;"
+        "}"
+        "QStatusBar {"
+        "    background-color: %1;"
+        "    color: %6;"
+        "    border-top: 1px solid %5;"
+        "}")
+        .arg(mainBgColor, tabPaneBgColor, tabBgColor, tabSelectedBgColor, borderColor, textColor, tabHoverBgColor)
     );
+}
+
+void MainWindow::onThemeChanged(bool isDark)
+{
+    Q_UNUSED(isDark)
+    // 重新应用主题样式
+    applyThemeStyles();
 }
 
 void MainWindow::setupMenuBar()
