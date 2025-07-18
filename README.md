@@ -475,4 +475,4 @@ qDebug() << "Format compatibility:" << validateFormatAndText(format, text);
 
 **感谢您使用QR码生成识别器！** 🎉
 
-*最后更新: 2024年*
+*最后更新: 2025.07.18*
