@@ -46,6 +46,7 @@ private:
     QCheckBox* m_autoRecognizeCheckBox;
     QSpinBox* m_recognitionTimeoutSpinBox;
     QCheckBox* m_autoCopyCheckBox;
+    QCheckBox* m_autoOpenUrlCheckBox;  // 新增：自动打开网址选项
     
     // 界面设置
     QGroupBox* m_interfaceGroup;

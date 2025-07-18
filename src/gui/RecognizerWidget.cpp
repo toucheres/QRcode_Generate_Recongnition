@@ -1,5 +1,6 @@
 #include "gui/RecognizerWidget.h"
 #include "utils/AppUtils.h"
+#include "utils/AppSettings.h"
 #include <QApplication>
 #include <QClipboard>
 #include <QDateTime>
@@ -544,6 +545,11 @@ void RecognizerWidget::updateResultDisplay(const QRCodeRecognizer::RecognitionRe
     {
         QApplication::clipboard()->setText(result.text);
         m_statusLabel->setText("识别完成，内容已复制到剪贴板");
+        
+        // 尝试自动打开URL（如果启用了该功能）
+        if (AppSettings::instance().tryAutoOpenUrl(result.text)) {
+            m_statusLabel->setText("识别完成，内容已复制到剪贴板，网址已自动打开");
+        }
     }
 }
 

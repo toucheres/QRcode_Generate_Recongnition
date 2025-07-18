@@ -63,9 +63,14 @@ void SettingsDialog::setupUI()
     m_autoCopyCheckBox = new QCheckBox("自动复制识别结果到剪贴板");
     m_autoCopyCheckBox->setChecked(true);
     
+    m_autoOpenUrlCheckBox = new QCheckBox("识别结果为网址时自动快捷打开");
+    m_autoOpenUrlCheckBox->setChecked(true);
+    m_autoOpenUrlCheckBox->setToolTip("当识别到的内容是网址(http/https)时，提供快捷打开选项");
+    
     recognitionLayout->addRow(m_autoRecognizeCheckBox);
     recognitionLayout->addRow("识别超时:", m_recognitionTimeoutSpinBox);
     recognitionLayout->addRow(m_autoCopyCheckBox);
+    recognitionLayout->addRow(m_autoOpenUrlCheckBox);
     
     mainLayout->addWidget(m_recognitionGroup);
     
@@ -129,6 +134,7 @@ void SettingsDialog::loadSettings()
     m_autoRecognizeCheckBox->setChecked(settings.value("recognition/autoRecognize", true).toBool());
     m_recognitionTimeoutSpinBox->setValue(settings.value("recognition/timeout", 5000).toInt());
     m_autoCopyCheckBox->setChecked(settings.value("recognition/autoCopy", true).toBool());
+    m_autoOpenUrlCheckBox->setChecked(settings.value("recognition/autoOpenUrl", true).toBool());
     
     // 加载界面设置
     m_showStatusBarCheckBox->setChecked(settings.value("interface/showStatusBar", true).toBool());
@@ -144,6 +150,7 @@ void SettingsDialog::saveSettings()
     settings.setValue("recognition/autoRecognize", m_autoRecognizeCheckBox->isChecked());
     settings.setValue("recognition/timeout", m_recognitionTimeoutSpinBox->value());
     settings.setValue("recognition/autoCopy", m_autoCopyCheckBox->isChecked());
+    settings.setValue("recognition/autoOpenUrl", m_autoOpenUrlCheckBox->isChecked());
     
     // 保存界面设置
     settings.setValue("interface/showStatusBar", m_showStatusBarCheckBox->isChecked());
@@ -174,6 +181,7 @@ void SettingsDialog::resetToDefaults()
     m_autoRecognizeCheckBox->setChecked(true);
     m_recognitionTimeoutSpinBox->setValue(5000);
     m_autoCopyCheckBox->setChecked(true);
+    m_autoOpenUrlCheckBox->setChecked(true);
     m_showStatusBarCheckBox->setChecked(true);
     m_rememberWindowSizeCheckBox->setChecked(true);
     m_fontSizeSpinBox->setValue(9);

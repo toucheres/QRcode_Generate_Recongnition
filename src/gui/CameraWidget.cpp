@@ -1,5 +1,6 @@
 #include "gui/CameraWidget.h"
 #include "utils/AppUtils.h"
+#include "utils/AppSettings.h"
 #include <QApplication>
 #include <QAudioOutput>
 #include <QCameraDevice>
@@ -239,6 +240,9 @@ void CameraWidget::onRecognitionResult(const QRCodeRecognizer::RecognitionResult
 
         // 自动保存到剪贴板
         QApplication::clipboard()->setText(result.text);
+
+        // 尝试自动打开URL（如果启用了该功能）
+        AppSettings::instance().tryAutoOpenUrl(result.text);
 
         m_detectionCount++;
         m_detectionCountLabel->setText(QString("检测次数: %1").arg(m_detectionCount));
