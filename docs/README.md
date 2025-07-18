@@ -42,6 +42,23 @@
 - 迁移指南
 - 未来版本规划
 
+### 📊 [项目开发总结报告](PROJECT_DEVELOPMENT_SUMMARY.md)
+完整的项目开发历程总结，包含技术架构、开发流程、问题解决等
+- 项目概述与目标
+- 技术架构设计
+- 核心功能实现
+- 开发流程与版本演进
+- 技术挑战与解决方案
+- 性能优化成果
+- 项目价值评估
+
+### 🔄 [开发流程图](DEVELOPMENT_FLOW.md)
+项目开发流程的可视化展示
+- 开发时间线
+- 技术架构演进
+- 问题解决流程
+- 用户交互流程
+
 ## 📖 快速导航
 
 ### 新用户推荐阅读顺序
@@ -83,7 +100,7 @@
 ## 🎯 版本信息
 
 ### 当前版本: v3.0.0
-- **发布日期**: 2024年12月20日
+- **发布日期**: 2025年7月18日
 - **主要特性**: 完整识别功能、URL自动打开、响应式UI
 - **重要修复**: PDF417中文处理、UI布局优化
 
@@ -115,11 +132,13 @@
 | 📖 使用 | [用户手册](USER_MANUAL.md) | 详细的功能使用说明 |
 | 👩‍💻 开发 | [开发者指南](DEVELOPER_GUIDE.md) | 开发和贡献指导 |
 | 📋 更新 | [更新日志](CHANGELOG.md) | 版本历史和新功能 |
-| 🐛 问题 | [GitHub Issues](https://github.com/toucheres/QRcode_Generate_Recongnition/issues) | 问题报告和功能建议 |
+| � 总结 | [开发总结报告](PROJECT_DEVELOPMENT_SUMMARY.md) | 完整的项目开发历程总结 |
+| 🔄 流程 | [开发流程图](DEVELOPMENT_FLOW.md) | 项目开发流程可视化 |
+| �🐛 问题 | [GitHub Issues](https://github.com/toucheres/QRcode_Generate_Recongnition/issues) | 问题报告和功能建议 |
 | 📥 下载 | [GitHub Releases](https://github.com/toucheres/QRcode_Generate_Recongnition/releases) | 下载最新版本 |
 
 ---
 
 **提示**: 文档持续更新中，如发现内容过时或有误，请通过GitHub Issues反馈。
 
-*最后更新: 2024年12月20日*
+*最后更新: 2025年7月18日*

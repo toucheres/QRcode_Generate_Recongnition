@@ -3,21 +3,7 @@
 #include <QStandardPaths>
 #include <QTextCodec>
 #include "gui/MainWindow.h"
-// TODO: PDF417 + Chinese character crash issue
-// Steps to reproduce:
-//   1. Generate or recognize a PDF417 barcode containing Chinese characters.
-//   2. Observe application behavior.
-//
-// Expected behavior:
-//   - The application should correctly process PDF417 barcodes with Chinese characters.
-//
-// Actual behavior:
-//   - The application crashes when handling PDF417 barcodes with Chinese characters.
-//
-// Potential workarounds:
-//   - Ensure all relevant libraries support UTF-8 encoding.
-//   - Check for updates or patches in the barcode library.
-//   - Consider preprocessing text to avoid problematic characters.
+
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
@@ -27,7 +13,7 @@ int main(int argc, char *argv[])
     
     // 设置应用程序信息
     app.setApplicationName("QR码生成识别器");
-    app.setApplicationVersion("2.0");
+    app.setApplicationVersion("3.0");
     app.setOrganizationName("SCU-CS");
     app.setOrganizationDomain("scu-cs.org");
     
